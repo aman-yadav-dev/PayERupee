@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Mail, ArrowLeft, CheckCircle2 } from "lucide-react";
@@ -13,11 +13,12 @@ import {
   fieldFade,
   stagger,
 } from "@/components/auth/AuthShell";
+import { forgotPasswordAction } from "@/actions/auth/forgot-password";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | undefined>();
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -28,13 +29,23 @@ export default function ForgotPasswordPage() {
     }
 
     setError(undefined);
-    setLoading(true);
 
-    setTimeout(() => {
-      setLoading(false);
-      setSubmitted(true);
-      toast.success("Password reset link sent!");
-    }, 1200);
+    startTransition(async () => {
+      try {
+        const res = await forgotPasswordAction({ email: email.trim().toLowerCase() });
+        if (res.success) {
+          setSubmitted(true);
+          toast.success("Password reset instructions sent!");
+        } else {
+          toast.error(res.message || "Failed to send reset link");
+          setError(res.message);
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Something went wrong";
+        toast.error(msg);
+        setError(msg);
+      }
+    });
   }
 
   return (
@@ -74,7 +85,7 @@ export default function ForgotPasswordPage() {
               <div>
                 <h3 className="font-semibold text-zinc-900 text-base">Check your inbox</h3>
                 <p className="mt-1 text-[13px] text-zinc-500">
-                  We've sent a password reset link to <strong className="text-zinc-800">{email}</strong>.
+                  If an account exists for <strong className="text-zinc-800">{email}</strong>, we have sent instructions to reset your password.
                 </p>
               </div>
               <Link
@@ -88,7 +99,7 @@ export default function ForgotPasswordPage() {
           ) : (
             <form onSubmit={onSubmit} noValidate className="space-y-4">
               <InputField
-                label="Registered Business Email"
+                label="Email"
                 icon={Mail}
                 type="email"
                 autoComplete="email"
@@ -102,7 +113,7 @@ export default function ForgotPasswordPage() {
                 error={error}
               />
 
-              <SubmitButton loading={loading}>Send Reset Instructions</SubmitButton>
+              <SubmitButton loading={isPending}>Send Reset Instructions</SubmitButton>
 
               <div className="pt-4 text-center">
                 <Link

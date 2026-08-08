@@ -4,81 +4,56 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Building2, Mail, MapPin, Phone, UserRound } from "lucide-react";
+import { Building2, MapPin, Phone, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import {
-  AuthDivider,
   FloatingFintechPanel,
-  GoogleButton,
   InputField,
   LogoBlock,
-  PasswordField,
   SubmitButton,
   TextareaField,
   fieldFade,
   stagger,
 } from "@/components/auth/AuthShell";
 import { CustomCheckbox } from "@/components/ui/checkbox";
-import { registerMerchantAction } from "@/actions/auth/register";
+import { completeMerchantOnboardingAction } from "@/actions/auth/onboarding";
 
-interface RegisterFormData {
-  fullName: string;
+import { authClient } from "@/lib/auth-client";
+
+interface OnboardingFormData {
   businessName: string;
-  email: string;
   phone: string;
   address: string;
-  password: string;
-  confirmPassword: string;
 }
 
-interface RegisterErrors {
-  fullName?: string;
+interface OnboardingErrors {
   businessName?: string;
-  email?: string;
   phone?: string;
   address?: string;
-  password?: string;
-  confirmPassword?: string;
   terms?: string;
 }
 
-export default function RegisterPage() {
+export default function OnboardingPage() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const { data: session } = authClient.useSession();
 
-  const [formData, setFormData] = useState<RegisterFormData>({
-    fullName: "",
+  const [formData, setFormData] = useState<OnboardingFormData>({
     businessName: "",
-    email: "",
     phone: "",
     address: "",
-    password: "",
-    confirmPassword: "",
   });
   const [agreed, setAgreed] = useState(false);
-  const [passwordVisible, setPasswordVisible] = useState(false);
-  const [confirmVisible, setConfirmVisible] = useState(false);
-  const [errors, setErrors] = useState<RegisterErrors>({});
+  const [errors, setErrors] = useState<OnboardingErrors>({});
   const [shakeKey, setShakeKey] = useState(0);
 
-  function validate(): RegisterErrors {
-    const e: RegisterErrors = {};
-    if (!formData.fullName.trim()) {
-      e.fullName = "Full name is required";
-    } else if (formData.fullName.trim().length < 2) {
-      e.fullName = "Full name must be at least 2 characters";
-    }
+  function validate(): OnboardingErrors {
+    const e: OnboardingErrors = {};
 
     if (!formData.businessName.trim()) {
       e.businessName = "Company name is required";
     } else if (formData.businessName.trim().length < 2) {
       e.businessName = "Company name must be at least 2 characters";
-    }
-
-    if (!formData.email.trim()) {
-      e.email = "Email is required";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      e.email = "Enter a valid email address";
     }
 
     if (!formData.phone.trim()) {
@@ -93,20 +68,8 @@ export default function RegisterPage() {
       e.address = "Address must be at least 5 characters";
     }
 
-    if (!formData.password) {
-      e.password = "Password is required";
-    } else if (formData.password.length < 8) {
-      e.password = "Password must be at least 8 characters";
-    }
-
-    if (!formData.confirmPassword) {
-      e.confirmPassword = "Please confirm your password";
-    } else if (formData.password !== formData.confirmPassword) {
-      e.confirmPassword = "Passwords do not match";
-    }
-
     if (!agreed) {
-      e.terms = "You must accept the Terms of Service and Privacy Policy to continue";
+      e.terms = "You must accept the Terms of Service & Privacy Policy to proceed";
     }
 
     return e;
@@ -125,49 +88,43 @@ export default function RegisterPage() {
 
     startTransition(async () => {
       try {
-        const res = await registerMerchantAction({
-          name: formData.fullName.trim(),
+        const res = await completeMerchantOnboardingAction({
           businessName: formData.businessName.trim(),
-          email: formData.email.trim().toLowerCase(),
           phone: formData.phone.trim(),
           address: formData.address.trim(),
-          password: formData.password,
           termsAccepted: agreed,
         });
 
         if (res.success) {
-          toast.success("Merchant account created successfully!");
+          toast.success("Merchant profile created successfully!");
           router.push("/pending-approval");
           router.refresh();
         } else {
-          toast.error(res.message || "Failed to create account");
+          toast.error(res.message || "Failed to complete setup");
           setShakeKey((k) => k + 1);
           if (res.errors && typeof res.errors === "object") {
-            const fieldErrors: RegisterErrors = {};
+            const fieldErrors: OnboardingErrors = {};
             const apiErrors = res.errors as Record<string, string[]>;
-            if (apiErrors.name?.[0]) fieldErrors.fullName = apiErrors.name[0];
             if (apiErrors.businessName?.[0]) fieldErrors.businessName = apiErrors.businessName[0];
-            if (apiErrors.email?.[0]) fieldErrors.email = apiErrors.email[0];
             if (apiErrors.phone?.[0]) fieldErrors.phone = apiErrors.phone[0];
             if (apiErrors.address?.[0]) fieldErrors.address = apiErrors.address[0];
-            if (apiErrors.password?.[0]) fieldErrors.password = apiErrors.password[0];
             if (apiErrors.termsAccepted?.[0]) fieldErrors.terms = apiErrors.termsAccepted[0];
             setErrors(fieldErrors);
           }
         }
       } catch (err: unknown) {
-        const errorMsg = err instanceof Error ? err.message : "Something went wrong";
-        toast.error(errorMsg);
+        const msg = err instanceof Error ? err.message : "Something went wrong";
+        toast.error(msg);
         setShakeKey((k) => k + 1);
       }
     });
   }
 
   const setField =
-    (field: keyof RegisterFormData) =>
+    (field: keyof OnboardingFormData) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       setFormData((prev) => ({ ...prev, [field]: e.target.value }));
-      if (errors[field as keyof RegisterErrors]) {
+      if (errors[field as keyof OnboardingErrors]) {
         setErrors((prev) => ({
           ...prev,
           [field]: undefined,
@@ -179,7 +136,7 @@ export default function RegisterPage() {
     <main className="flex min-h-[100dvh] flex-col bg-white lg:flex-row">
       <FloatingFintechPanel />
 
-      <section className="flex flex-1 min-h-[100dvh] justify-center overflow-y-auto bg-white px-6 py-8 sm:px-10 lg:items-start lg:px-14 lg:pt-10">
+      <section className="flex flex-1 min-h-[100dvh] justify-center overflow-y-auto bg-white px-6 py-8 sm:px-10 lg:items-start lg:px-14 lg:pt-12">
         <motion.div
           variants={stagger}
           initial="initial"
@@ -193,12 +150,24 @@ export default function RegisterPage() {
 
           {/* Heading */}
           <motion.div variants={fieldFade} className="mb-6 text-center">
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 mb-3">
+              <Sparkles className="h-3.5 w-3.5" />
+              Almost Done
+            </div>
             <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.04em] text-zinc-900">
-              Create merchant account
+              Complete Merchant Profile
             </h1>
             <p className="mt-2 text-[13.5px] text-zinc-400">
-              Set up your business workspace & disbursal engine
+              Provide your business credentials to initialize your disbursal gateway
             </p>
+
+            {session?.user && (
+              <div className="mt-4 inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-1.5 text-xs text-zinc-600">
+                <span className="font-semibold text-zinc-900">{session.user.name || "Authenticated User"}</span>
+                <span>•</span>
+                <span className="text-zinc-500">{session.user.email}</span>
+              </div>
+            )}
           </motion.div>
 
           {/* Form */}
@@ -210,16 +179,6 @@ export default function RegisterPage() {
               className="space-y-3.5"
             >
               <InputField
-                label="Full Name"
-                icon={UserRound}
-                autoComplete="name"
-                placeholder="Aarav Mehta"
-                name="fullName"
-                value={formData.fullName}
-                onChange={setField("fullName")}
-                error={errors.fullName}
-              />
-              <InputField
                 label="Company Name"
                 icon={Building2}
                 autoComplete="organization"
@@ -228,17 +187,6 @@ export default function RegisterPage() {
                 value={formData.businessName}
                 onChange={setField("businessName")}
                 error={errors.businessName}
-              />
-              <InputField
-                label="Email"
-                icon={Mail}
-                type="email"
-                autoComplete="email"
-                placeholder="you@company.com"
-                name="email"
-                value={formData.email}
-                onChange={setField("email")}
-                error={errors.email}
               />
               <InputField
                 label="Phone Number"
@@ -261,31 +209,9 @@ export default function RegisterPage() {
                 onChange={setField("address")}
                 error={errors.address}
               />
-              <PasswordField
-                label="Password"
-                visible={passwordVisible}
-                onToggle={() => setPasswordVisible((v) => !v)}
-                autoComplete="new-password"
-                placeholder="Create a strong password"
-                name="password"
-                value={formData.password}
-                onChange={setField("password")}
-                error={errors.password}
-              />
-              <PasswordField
-                label="Confirm Password"
-                visible={confirmVisible}
-                onToggle={() => setConfirmVisible((v) => !v)}
-                autoComplete="new-password"
-                placeholder="Re-enter your password"
-                name="confirmPassword"
-                value={formData.confirmPassword}
-                onChange={setField("confirmPassword")}
-                error={errors.confirmPassword}
-              />
 
               {/* Terms & conditions */}
-              <motion.div variants={fieldFade} className="pt-1">
+              <motion.div variants={fieldFade} className="pt-2">
                 <CustomCheckbox
                   checked={agreed}
                   onChange={(e) => {
@@ -319,26 +245,22 @@ export default function RegisterPage() {
               </motion.div>
 
               <SubmitButton loading={isPending}>
-                Create Merchant Account
+                Complete Profile & Submit
               </SubmitButton>
             </form>
           </AnimatePresence>
 
-          <AuthDivider />
-          <GoogleButton />
-
-          <motion.p
+          <motion.div
             variants={fieldFade}
-            className="mt-8 text-center text-[13px] text-zinc-400"
+            className="mt-8 text-center"
           >
-            Already have an account?{" "}
             <Link
               href="/login"
-              className="font-semibold text-indigo-600 transition-colors hover:text-indigo-700"
+              className="text-[13px] text-zinc-400 hover:text-zinc-600 transition-colors"
             >
-              Sign in →
+              Cancel and sign out
             </Link>
-          </motion.p>
+          </motion.div>
         </motion.div>
       </section>
     </main>

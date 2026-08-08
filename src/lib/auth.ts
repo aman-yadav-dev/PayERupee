@@ -13,6 +13,17 @@ export const auth = betterAuth({
     autoSignIn: true,
   },
 
+  socialProviders: {
+    ...(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
+      ? {
+          google: {
+            clientId: env.GOOGLE_CLIENT_ID,
+            clientSecret: env.GOOGLE_CLIENT_SECRET,
+          },
+        }
+      : {}),
+  },
+
   secret: env.BETTER_AUTH_SECRET,
 
   baseURL: `${env.BETTER_AUTH_URL}/api/v1/auth`,
