@@ -16,10 +16,14 @@ export function errorResponse(
   message: string,
   errorDetails: any = null,
 ): ApiResponse<null> {
+  const isFieldErrors =
+    errorDetails && typeof errorDetails === "object" && !Array.isArray(errorDetails);
+
   return {
     success: false,
     message,
     data: null,
-    error: errorDetails ? JSON.stringify(errorDetails) : message,
+    error: typeof errorDetails === "string" ? errorDetails : message,
+    errors: isFieldErrors ? (errorDetails as Record<string, string[]>) : null,
   };
 }

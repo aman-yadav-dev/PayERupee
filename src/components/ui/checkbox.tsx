@@ -1,9 +1,9 @@
-"use client"
+"use client";
 
-import { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox"
-
-import { cn } from "@/lib/utils"
-import { CheckIcon } from "lucide-react"
+import React, { useId, useState, useCallback } from "react";
+import { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox";
+import { cn } from "@/lib/utils";
+import { Check, CheckIcon } from "lucide-react";
 
 function Checkbox({ className, ...props }: CheckboxPrimitive.Root.Props) {
   return (
@@ -19,11 +19,98 @@ function Checkbox({ className, ...props }: CheckboxPrimitive.Root.Props) {
         data-slot="checkbox-indicator"
         className="grid place-content-center text-current transition-none [&>svg]:size-3.5"
       >
-        <CheckIcon
-        />
+        <CheckIcon />
       </CheckboxPrimitive.Indicator>
     </CheckboxPrimitive.Root>
-  )
+  );
 }
 
-export { Checkbox }
+interface CustomCheckboxProps
+  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "type"> {
+  label?: React.ReactNode;
+  children?: React.ReactNode;
+  labelClassName?: string;
+}
+
+const CustomCheckbox = React.forwardRef<HTMLInputElement, CustomCheckboxProps>(
+  (
+    {
+      className,
+      label,
+      children,
+      labelClassName,
+      id: propId,
+      checked,
+      defaultChecked,
+      onChange,
+      ...props
+    },
+    ref
+  ) => {
+    const autoId = useId();
+    const id = propId ?? autoId;
+
+    const isControlled = checked !== undefined;
+    const [internalChecked, setInternalChecked] = useState<boolean>(
+      !!defaultChecked
+    );
+    const isChecked = isControlled ? !!checked : internalChecked;
+
+    const handleChange = useCallback(
+      (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!isControlled) setInternalChecked(e.target.checked);
+        onChange?.(e);
+      },
+      [isControlled, onChange]
+    );
+
+    return (
+      <label
+        htmlFor={id}
+        className={cn(
+          "flex cursor-pointer select-none items-start gap-2",
+          className
+        )}
+      >
+        <span
+          className="relative mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded border transition-all duration-150 focus-within:ring-2 focus-within:ring-indigo-300 focus-within:ring-offset-1"
+          style={{
+            backgroundColor: isChecked ? "rgb(79 70 229)" : "white",
+            borderColor: isChecked ? "rgb(79 70 229)" : "rgb(212 212 216)",
+          }}
+        >
+          <input
+            id={id}
+            type="checkbox"
+            ref={ref}
+            checked={isChecked}
+            onChange={handleChange}
+            className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0"
+            {...props}
+          />
+          <Check
+            className={cn(
+              "pointer-events-none relative z-10 h-2.5 w-2.5 text-white transition-opacity duration-100",
+              isChecked ? "opacity-100" : "opacity-0"
+            )}
+            strokeWidth={3}
+          />
+        </span>
+
+        {(label != null || children != null) && (
+          <span
+            className={cn(
+              "text-[12.5px] leading-[1.6] text-zinc-500",
+              labelClassName
+            )}
+          >
+            {label ?? children}
+          </span>
+        )}
+      </label>
+    );
+  }
+);
+CustomCheckbox.displayName = "CustomCheckbox";
+
+export { Checkbox, CustomCheckbox };

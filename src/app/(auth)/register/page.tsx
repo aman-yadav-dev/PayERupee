@@ -1,264 +1,344 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
-import { Loader2, ShieldCheck, Zap, ArrowRight } from "lucide-react";
 import Link from "next/link";
-
-import { registerSchema, type RegisterInput } from "@/schemas/auth";
+import { motion, AnimatePresence } from "framer-motion";
+import { Building2, Mail, MapPin, Phone, UserRound } from "lucide-react";
+import { toast } from "sonner";
+import {
+  AuthDivider,
+  FloatingFintechPanel,
+  GoogleButton,
+  InputField,
+  LogoBlock,
+  PasswordField,
+  SubmitButton,
+  TextareaField,
+  fieldFade,
+  stagger,
+} from "@/components/auth/AuthShell";
+import { CustomCheckbox } from "@/components/ui/checkbox";
 import { registerMerchantAction } from "@/actions/auth/register";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+interface RegisterFormData {
+  fullName: string;
+  businessName: string;
+  email: string;
+  phone: string;
+  address: string;
+  password: string;
+  confirmPassword: string;
+}
+
+interface RegisterErrors {
+  fullName?: string;
+  businessName?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  password?: string;
+  confirmPassword?: string;
+  terms?: string;
+}
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [isPending, setIsPending] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
-  const form = useForm<RegisterInput>({
-    resolver: zodResolver(registerSchema),
-    defaultValues: {
-      name: "",
-      businessName: "",
-      email: "",
-      phone: "",
-      password: "",
-      address: "",
-    },
+  const [formData, setFormData] = useState<RegisterFormData>({
+    fullName: "",
+    businessName: "",
+    email: "",
+    phone: "",
+    address: "",
+    password: "",
+    confirmPassword: "",
   });
+  const [agreed, setAgreed] = useState(false);
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [errors, setErrors] = useState<RegisterErrors>({});
+  const [shakeKey, setShakeKey] = useState(0);
 
-  async function onSubmit(data: RegisterInput) {
-    setIsPending(true);
-    const response = await registerMerchantAction(data);
-    setIsPending(false);
+  function validate(): RegisterErrors {
+    const e: RegisterErrors = {};
+    if (!formData.fullName.trim()) {
+      e.fullName = "Full name is required";
+    } else if (formData.fullName.trim().length < 2) {
+      e.fullName = "Full name must be at least 2 characters";
+    }
 
-    if (!response.success) {
-      toast.error(response.error || "Registration failed");
+    if (!formData.businessName.trim()) {
+      e.businessName = "Business name is required";
+    } else if (formData.businessName.trim().length < 2) {
+      e.businessName = "Business name must be at least 2 characters";
+    }
+
+    if (!formData.email.trim()) {
+      e.email = "Business email is required";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      e.email = "Enter a valid email address";
+    }
+
+    if (!formData.phone.trim()) {
+      e.phone = "Phone number is required";
+    } else if (formData.phone.trim().length < 10) {
+      e.phone = "Phone number must be at least 10 digits";
+    }
+
+    if (!formData.address.trim()) {
+      e.address = "Business address is required";
+    } else if (formData.address.trim().length < 5) {
+      e.address = "Address must be at least 5 characters";
+    }
+
+    if (!formData.password) {
+      e.password = "Password is required";
+    } else if (formData.password.length < 8) {
+      e.password = "Password must be at least 8 characters";
+    }
+
+    if (!formData.confirmPassword) {
+      e.confirmPassword = "Please confirm your password";
+    } else if (formData.password !== formData.confirmPassword) {
+      e.confirmPassword = "Passwords do not match";
+    }
+
+    if (!agreed) {
+      e.terms = "You must accept the terms to continue";
+    }
+
+    return e;
+  }
+
+  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const errs = validate();
+    if (Object.keys(errs).length > 0) {
+      setErrors(errs);
+      setShakeKey((k) => k + 1);
       return;
     }
 
-    toast.success("Account created successfully!");
-    router.push("/dashboard");
+    setErrors({});
+
+    startTransition(async () => {
+      try {
+        const res = await registerMerchantAction({
+          name: formData.fullName.trim(),
+          businessName: formData.businessName.trim(),
+          email: formData.email.trim().toLowerCase(),
+          phone: formData.phone.trim(),
+          address: formData.address.trim(),
+          password: formData.password,
+          termsAccepted: agreed,
+        });
+
+        if (res.success) {
+          toast.success("Merchant account created successfully!");
+          router.push("/pending-approval");
+          router.refresh();
+        } else {
+          toast.error(res.message || "Failed to create account");
+          setShakeKey((k) => k + 1);
+          if (res.errors && typeof res.errors === "object") {
+            const fieldErrors: RegisterErrors = {};
+            const apiErrors = res.errors as Record<string, string[]>;
+            if (apiErrors.name?.[0]) fieldErrors.fullName = apiErrors.name[0];
+            if (apiErrors.businessName?.[0]) fieldErrors.businessName = apiErrors.businessName[0];
+            if (apiErrors.email?.[0]) fieldErrors.email = apiErrors.email[0];
+            if (apiErrors.phone?.[0]) fieldErrors.phone = apiErrors.phone[0];
+            if (apiErrors.address?.[0]) fieldErrors.address = apiErrors.address[0];
+            if (apiErrors.password?.[0]) fieldErrors.password = apiErrors.password[0];
+            if (apiErrors.termsAccepted?.[0]) fieldErrors.terms = apiErrors.termsAccepted[0];
+            setErrors(fieldErrors);
+          }
+        }
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : "Something went wrong";
+        toast.error(errorMsg);
+        setShakeKey((k) => k + 1);
+      }
+    });
   }
 
+  const setField =
+    (field: keyof RegisterFormData) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      setFormData((prev) => ({ ...prev, [field]: e.target.value }));
+      if (errors[field as keyof RegisterErrors]) {
+        setErrors((prev) => ({
+          ...prev,
+          [field]: undefined,
+        }));
+      }
+    };
+
   return (
-    <div className="min-h-screen grid lg:grid-cols-2 w-full">
-      {/* Left Branding / Stitch AI Pane */}
-      <div className="hidden lg:flex flex-col justify-between bg-zinc-950 p-10 text-white relative overflow-hidden">
-        {/* Subtle background glow effect */}
-        <div className="absolute -top-24 -left-24 w-96 h-96 bg-primary/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+    <main className="flex min-h-[100dvh] flex-col bg-white lg:flex-row">
+      <FloatingFintechPanel />
 
-        <div className="flex items-center gap-2 z-10">
-          <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center font-bold text-white">
-            P
-          </div>
-          <span className="text-xl font-semibold tracking-tight">
-            PayERupee
-          </span>
-        </div>
+      <section className="flex flex-1 min-h-[100dvh] justify-center overflow-y-auto bg-white px-6 py-8 sm:px-10 lg:items-start lg:px-14 lg:pt-10">
+        <motion.div
+          variants={stagger}
+          initial="initial"
+          animate="animate"
+          className="w-full max-w-[420px] pb-12"
+        >
+          {/* Logo */}
+          <motion.div variants={fieldFade} className="mb-6 flex justify-center">
+            <LogoBlock />
+          </motion.div>
 
-        <div className="space-y-6 z-10 my-auto">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-xs font-medium text-primary-foreground backdrop-blur-md">
-            <Zap className="h-3.5 w-3.5 text-primary" /> Next-Gen Payout
-            Infrastructure
-          </div>
-          <h1 className="text-4xl font-extrabold tracking-tight leading-tight">
-            Scale your business payouts with total confidence.
-          </h1>
-          <p className="text-zinc-400 max-w-md text-sm leading-relaxed">
-            Automate bank transfers, manage multi-currency ledgers, and
-            experience lightning-fast reconciliation built for modern Indian
-            enterprises.
-          </p>
-
-          <div className="pt-4 grid grid-cols-2 gap-4 text-xs text-zinc-400 border-t border-zinc-800">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-emerald-400" /> Bank-grade
-              AES Encryption
-            </div>
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-emerald-400" /> Real-time
-              Ledger Sync
-            </div>
-          </div>
-        </div>
-
-        <div className="text-xs text-zinc-500 z-10">
-          &copy; {new Date().getFullYear()} PayERupee Technologies Inc. All
-          rights reserved.
-        </div>
-      </div>
-
-      {/* Right Form Pane */}
-      <div className="flex items-center justify-center p-8 bg-zinc-50/50">
-        <div className="w-full max-w-md space-y-6 py-6">
-          <div className="space-y-2 text-center lg:text-left">
-            <h2 className="text-2xl font-bold tracking-tight text-zinc-900">
-              Create Merchant Account
-            </h2>
-            <p className="text-sm text-zinc-500">
-              Fill in your enterprise details to instantly provision your
-              ledger.
+          {/* Heading */}
+          <motion.div variants={fieldFade} className="mb-6 text-center">
+            <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.04em] text-zinc-900">
+              Create merchant account
+            </h1>
+            <p className="mt-2 text-[13.5px] text-zinc-400">
+              Set up your business workspace & disbursal engine
             </p>
-          </div>
+          </motion.div>
 
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Full Name</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Aarav Sharma"
-                          disabled={isPending}
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Work Email</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="aarav@company.com"
-                          type="email"
-                          disabled={isPending}
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="businessName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Business Name</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Acme Logistics Pvt Ltd"
-                          disabled={isPending}
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="phone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Phone Number</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="9876543210"
-                          disabled={isPending}
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <FormField
-                control={form.control}
+          {/* Form */}
+          <AnimatePresence mode="wait">
+            <form
+              key={shakeKey}
+              onSubmit={onSubmit}
+              noValidate
+              className="space-y-3.5"
+            >
+              <InputField
+                label="Full Name"
+                icon={UserRound}
+                autoComplete="name"
+                placeholder="Aarav Mehta"
+                name="fullName"
+                value={formData.fullName}
+                onChange={setField("fullName")}
+                error={errors.fullName}
+              />
+              <InputField
+                label="Business Name"
+                icon={Building2}
+                autoComplete="organization"
+                placeholder="Acme Financial Services"
+                name="businessName"
+                value={formData.businessName}
+                onChange={setField("businessName")}
+                error={errors.businessName}
+              />
+              <InputField
+                label="Business Email"
+                icon={Mail}
+                type="email"
+                autoComplete="email"
+                placeholder="finance@company.com"
+                name="email"
+                value={formData.email}
+                onChange={setField("email")}
+                error={errors.email}
+              />
+              <InputField
+                label="Phone Number"
+                icon={Phone}
+                type="tel"
+                autoComplete="tel"
+                placeholder="+91 98765 43210"
+                name="phone"
+                value={formData.phone}
+                onChange={setField("phone")}
+                error={errors.phone}
+              />
+              <TextareaField
+                label="Registered Business Address"
+                icon={MapPin}
+                autoComplete="street-address"
+                placeholder="Registered office address"
                 name="address"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Registered Address</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="123 Financial District, Mumbai, MH"
-                        disabled={isPending}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                value={formData.address}
+                onChange={setField("address")}
+                error={errors.address}
               />
-
-              <FormField
-                control={form.control}
+              <PasswordField
+                label="Password"
+                visible={passwordVisible}
+                onToggle={() => setPasswordVisible((v) => !v)}
+                autoComplete="new-password"
+                placeholder="Create a strong password"
                 name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="••••••••"
-                        type="password"
-                        disabled={isPending}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                value={formData.password}
+                onChange={setField("password")}
+                error={errors.password}
+              />
+              <PasswordField
+                label="Confirm Password"
+                visible={confirmVisible}
+                onToggle={() => setConfirmVisible((v) => !v)}
+                autoComplete="new-password"
+                placeholder="Re-enter your password"
+                name="confirmPassword"
+                value={formData.confirmPassword}
+                onChange={setField("confirmPassword")}
+                error={errors.confirmPassword}
               />
 
-              <Button
-                type="submit"
-                className="w-full h-11 text-base group"
-                disabled={isPending}
-              >
-                {isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Provisioning Account...
-                  </>
-                ) : (
-                  <>
-                    Get Started{" "}
-                    <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
-                  </>
+              {/* Terms & conditions */}
+              <motion.div variants={fieldFade} className="pt-1">
+                <CustomCheckbox
+                  checked={agreed}
+                  onChange={(e) => {
+                    setAgreed(e.target.checked);
+                    if (errors.terms)
+                      setErrors((prev) => ({ ...prev, terms: undefined }));
+                  }}
+                >
+                  I agree to the{" "}
+                  <Link
+                    href="/terms"
+                    className="font-medium text-indigo-600 transition-colors hover:text-indigo-700 underline"
+                  >
+                    Terms of Service
+                  </Link>{" "}
+                  and{" "}
+                  <Link
+                    href="/privacy"
+                    className="font-medium text-indigo-600 transition-colors hover:text-indigo-700 underline"
+                  >
+                    Privacy Policy
+                  </Link>
+                </CustomCheckbox>
+                {errors.terms && (
+                  <span className="mt-1 block text-[11.5px] text-red-500">
+                    {errors.terms}
+                  </span>
                 )}
-              </Button>
-            </form>
-          </Form>
+              </motion.div>
 
-          <div className="text-center text-sm text-zinc-500">
+              <SubmitButton loading={isPending}>
+                Create Merchant Account
+              </SubmitButton>
+            </form>
+          </AnimatePresence>
+
+          <AuthDivider />
+          <GoogleButton />
+
+          <motion.p
+            variants={fieldFade}
+            className="mt-8 text-center text-[13px] text-zinc-400"
+          >
             Already have an account?{" "}
             <Link
               href="/login"
-              className="font-semibold text-primary hover:underline"
+              className="font-semibold text-indigo-600 transition-colors hover:text-indigo-700"
             >
-              Sign in
+              Sign in →
             </Link>
-          </div>
-        </div>
-      </div>
-    </div>
+          </motion.p>
+        </motion.div>
+      </section>
+    </main>
   );
 }

@@ -1,132 +1,206 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
 import Link from "next/link";
-
-import { loginSchema, type LoginInput } from "@/schemas/auth";
+import { motion, AnimatePresence } from "framer-motion";
+import { Mail } from "lucide-react";
+import { toast } from "sonner";
+import {
+  AuthDivider,
+  FloatingFintechPanel,
+  GoogleButton,
+  InputField,
+  LogoBlock,
+  PasswordField,
+  SubmitButton,
+  fieldFade,
+  stagger,
+} from "@/components/auth/AuthShell";
+import { CustomCheckbox } from "@/components/ui/checkbox";
 import { loginAction } from "@/actions/auth/login";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+interface LoginFormData {
+  email: string;
+  password: string;
+}
+
+interface LoginErrors {
+  email?: string;
+  password?: string;
+}
 
 export default function LoginPage() {
   const router = useRouter();
-  const [isPending, setIsPending] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
-  const form = useForm<LoginInput>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-    },
+  const [formData, setFormData] = useState<LoginFormData>({
+    email: "",
+    password: "",
   });
+  const [remember, setRemember] = useState(false);
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [errors, setErrors] = useState<LoginErrors>({});
+  const [shakeKey, setShakeKey] = useState(0);
 
-  async function onSubmit(data: LoginInput) {
-    setIsPending(true);
-    const response = await loginAction(data);
-    setIsPending(false);
+  function validate(): LoginErrors {
+    const e: LoginErrors = {};
+    if (!formData.email.trim()) {
+      e.email = "Email is required";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      e.email = "Enter a valid email address";
+    }
+    if (!formData.password) {
+      e.password = "Password is required";
+    } else if (formData.password.length < 6) {
+      e.password = "Password must be at least 6 characters";
+    }
+    return e;
+  }
 
-    if (!response.success) {
-      toast.error(response.error || "Failed to login");
+  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const errs = validate();
+    if (Object.keys(errs).length > 0) {
+      setErrors(errs);
+      setShakeKey((k) => k + 1);
       return;
     }
 
-    toast.success("Welcome back!");
-    // Redirect to the merchant dashboard upon success
-    router.push("/dashboard"); 
+    setErrors({});
+
+    startTransition(async () => {
+      try {
+        const res = await loginAction({
+          email: formData.email,
+          password: formData.password,
+        });
+
+        if (res.success) {
+          toast.success("Welcome back! Redirecting to dashboard...");
+          router.push("/dashboard");
+          router.refresh();
+        } else {
+          toast.error(res.message || "Failed to sign in");
+          setShakeKey((k) => k + 1);
+          if (res.errors && typeof res.errors === "object") {
+            const fieldErrors: LoginErrors = {};
+            const apiErrors = res.errors as Record<string, string[]>;
+            if (apiErrors.email?.[0]) fieldErrors.email = apiErrors.email[0];
+            if (apiErrors.password?.[0]) fieldErrors.password = apiErrors.password[0];
+            setErrors(fieldErrors);
+          }
+        }
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : "Something went wrong";
+        toast.error(errorMsg);
+        setShakeKey((k) => k + 1);
+      }
+    });
   }
 
+  const set = (field: keyof LoginFormData) =>
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setFormData((prev) => ({ ...prev, [field]: e.target.value }));
+      if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }));
+    };
+
   return (
-    <div className="flex min-h-screen items-center justify-center p-4 bg-gray-50">
-      <Card className="w-full max-w-md shadow-lg">
-        <CardHeader className="space-y-1 text-center">
-          <CardTitle className="text-2xl font-bold tracking-tight">
-            Sign in to PayERupee
-          </CardTitle>
-          <CardDescription>
-            Enter your email and password to access your dashboard
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
+    <main className="flex min-h-[100dvh] flex-col bg-white lg:flex-row">
+      <FloatingFintechPanel />
+
+      <section className="flex flex-1 min-h-[100dvh] items-center justify-center overflow-y-auto bg-white px-6 py-12 sm:px-10 lg:px-14">
+        <motion.div
+          variants={stagger}
+          initial="initial"
+          animate="animate"
+          className="w-full max-w-[400px]"
+        >
+          {/* Logo */}
+          <motion.div variants={fieldFade} className="mb-10 flex justify-center">
+            <LogoBlock />
+          </motion.div>
+
+          {/* Heading */}
+          <motion.div variants={fieldFade} className="mb-8 text-center">
+            <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.04em] text-zinc-900">
+              Welcome back
+            </h1>
+            <p className="mt-2 text-[13.5px] text-zinc-400">
+              Sign in to your workspace
+            </p>
+          </motion.div>
+
+          {/* Form */}
+          <AnimatePresence mode="wait">
+            <form
+              key={shakeKey}
+              onSubmit={onSubmit}
+              noValidate
+              className="space-y-4"
+            >
+              <InputField
+                label="Email"
+                icon={Mail}
+                type="email"
+                autoComplete="email"
+                placeholder="you@company.com"
                 name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="merchant@example.com"
-                        type="email"
-                        disabled={isPending}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                value={formData.email}
+                onChange={set("email")}
+                error={errors.email}
               />
-              <FormField
-                control={form.control}
+
+              <PasswordField
+                visible={passwordVisible}
+                onToggle={() => setPasswordVisible((v) => !v)}
+                autoComplete="current-password"
+                placeholder="Enter your password"
                 name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="••••••••"
-                        type="password"
-                        disabled={isPending}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                value={formData.password}
+                onChange={set("password")}
+                error={errors.password}
               />
-              <Button type="submit" className="w-full" disabled={isPending}>
-                {isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Signing in...
-                  </>
-                ) : (
-                  "Sign In"
-                )}
-              </Button>
+
+              {/* Remember me + Forgot password */}
+              <motion.div
+                variants={fieldFade}
+                className="flex items-center justify-between pt-1"
+              >
+                <CustomCheckbox
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                  label="Remember me"
+                />
+                <Link
+                  href="/forgot-password"
+                  className="text-[12.5px] font-medium text-indigo-600 transition-colors hover:text-indigo-700"
+                >
+                  Forgot password?
+                </Link>
+              </motion.div>
+
+              <SubmitButton loading={isPending}>Sign In</SubmitButton>
             </form>
-          </Form>
-          
-          <div className="mt-6 text-center text-sm text-gray-500">
-            Don't have an account?{" "}
-            <Link href="/register" className="font-semibold text-primary hover:underline">
-              Create a Merchant Account
+          </AnimatePresence>
+
+          <AuthDivider />
+          <GoogleButton />
+
+          <motion.p
+            variants={fieldFade}
+            className="mt-8 text-center text-[13px] text-zinc-400"
+          >
+            No account yet?{" "}
+            <Link
+              href="/register"
+              className="font-semibold text-indigo-600 transition-colors hover:text-indigo-700"
+            >
+              Create one →
             </Link>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+          </motion.p>
+        </motion.div>
+      </section>
+    </main>
   );
 }
