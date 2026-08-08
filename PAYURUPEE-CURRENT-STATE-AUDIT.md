@@ -310,6 +310,7 @@ All listed foreign keys are explicit Prisma relations. Most financial relationsh
 | Passwords | Better Auth receives the password and hashes it internally; application does not log passwords. | Better than manual plaintext handling; policy has no explicit complexity/breach protection or reset flow. |
 | Authorization/RBAC | `role`/`status` enums exist only. | Not implemented; no route, action, or API guard. |
 | Session security | Better Auth defaults can produce HTTP-only/Lax cookies. | No explicit secure cookie policy, trusted origins, lifetime, revocation, session validation, logout, or tests. |
+| OAuth | Google provider/client code was added conditionally. | Not operable locally (credentials absent); client targets the wrong base URL; onboarding is broken; no tested callback/allowlist policy. |
 | CSRF | Better Auth endpoints include its built-in form CSRF middleware. | The server actions have no separate project-level CSRF design; direct use must be integration-tested. |
 | Input validation | Zod validates server action inputs; action destructuring prevents mass assignment. | Partial; phone/address/domain-specific validation and all other domain inputs are absent. |
 | Error leakage | Registration returns arbitrary `Error.message` to the client. | Unsafe; may disclose DB/auth details. |
@@ -319,7 +320,7 @@ All listed foreign keys are explicit Prisma relations. Most financial relationsh
 | XSS | React JSX escapes interpolated form values by default; no dangerous HTML API was found. | No specific current XSS sink found. |
 | IDOR | No protected resource endpoints exist. | Cannot assess operationally; authorization framework is absent. |
 | Secrets | `.env` is ignored; `.env.example` contains placeholders. | No tracked secret was found. `BETTER_AUTH_SECRET` runtime minimum is only 16 in `env.ts`, while its own example asks for 32+. |
-| Logging/audit | `pino` installed; logger imports commented out. `AuditLog` schema-only. | Not implemented. |
+| Logging/audit | `pino` installed; logger imports commented out. `AuditLog` schema-only; new recovery/onboarding actions use raw `console.error`. | Not implemented and risks logging unredacted error detail. |
 | Webhooks/files | No endpoint or upload implementation exists. | Not implemented; no signature/replay/upload controls exist. |
 | Dependencies | Lockfile exists. | Advisory check could not reach npm; no vulnerability conclusion possible. |
 
@@ -457,6 +458,11 @@ Scores are based on current executable repository evidence, not design intent.
    **Current behavior/risk:** The product cannot safely operate as a payment/payout platform. Documentation and marketing imply functionality that code does not provide.  
    **Next step:** Do not accept or move funds. Complete authentication/authorization and a formally designed financial posting subsystem before exposing payout features.
 
+2a. **The concurrently added onboarding action is incompatible with the current Prisma client.**  
+   **Evidence:** [`src/actions/auth/onboarding.ts`](src/actions/auth/onboarding.ts) uses `Wallet.userId` and `AuditLog.entity`, `userId`, and `details`; generated Prisma types expose `merchantId`, `entityType`, `adminId`, and `metadata`.  
+   **Current behavior/risk:** The project cannot type-check/build with this action as written, and the intended workflow would incorrectly demote any signed-in user to a pending merchant.  
+   **Next step:** Reconcile the action with the actual schema and authorization model before attempting onboarding.
+
 ### P1 — critical
 
 3. **No role/status/deletion enforcement exists.**  
@@ -547,6 +553,7 @@ Scores are based on current executable repository evidence, not design intent.
 - Added server actions for credential registration and login.
 - Added a registration page that collects name, business name, email, phone, address, password, confirmation, and terms consent.
 - Added login, pending-approval, and presentation-only forgot-password pages.
+- Added terms/privacy pages and a Google/onboarding scaffold in concurrent uncommitted work; neither constitutes verified compliant/legal/OAuth/onboarding functionality.
 - Added a full public marketing landing page and shared auth-page UI.
 - Added a basic action response helper and an environment variable schema.
 - Wrote architecture, API, database, deployment, roadmap, ERD, changelog, and release-note documents.
@@ -556,13 +563,13 @@ Scores are based on current executable repository evidence, not design intent.
 - Registration persists custom identity fields and creates a wallet **only after** Better Auth identity creation; atomicity/recovery is incomplete.
 - Email/password auth calls Better Auth, but cookie/session handoff through the server actions is not correctly demonstrated/configured.
 - Wallet/ledger, payouts, KYC, admin, API key, blacklist, support, and audit concepts are modeled in Prisma but have no implemented feature behavior.
-- Route/pages visually exist for pending approval and reset, but they are not connected to real lifecycle functionality.
+- Route/pages visually exist for pending approval, reset, onboarding, terms, and privacy, but they are not connected to complete lifecycle functionality. The onboarding action currently conflicts with the Prisma schema.
 - The response abstraction exists for server actions but not a complete HTTP API contract.
 
 ### NOT DONE
 
 - Protected routes, session retrieval, logout, roles/status enforcement.
-- Email verification, password reset, notifications.
+- Email verification, actual password reset/email delivery, notifications, and a working Google OAuth/onboarding flow.
 - Merchant/admin dashboard and onboarding/KYC workflow.
 - Financial posting engine, reconciliation, fund requests, payout engine/provider/webhooks, API key auth, idempotency handling.
 - Rate limiting, logging/audit writes, monitoring, CI/CD, migrations, test suite, deployment artifacts.
@@ -572,6 +579,8 @@ Scores are based on current executable repository evidence, not design intent.
 ### Phase 0 — Correct the baseline
 
 - Resolve the Next.js version documentation mismatch and replace feature claims with current availability.
+- Reconcile or remove the uncommitted onboarding action's invalid Prisma field references before any build/deploy attempt.
+- Correct the auth-client endpoint and either complete Google OAuth configuration/tests or disable the visible control; qualify legal/marketing claims that code cannot substantiate.
 - Establish versioned Prisma migrations and verify the database schema without relying on `db push` for production.
 - Repair/choose the supported Better Auth server-action/route cookie pattern and add integration proof.
 - Remove false UI promises (or label them unavailable) for password reset, dashboard, terms, privacy, and claimed live capabilities.
@@ -705,11 +714,35 @@ Scores are based on current executable repository evidence, not design intent.
 
 ### FILE: `src/app/(auth)/forgot-password/page.tsx`
 
-**Status:** Placeholder  
+**Status:** Partial placeholder  
 **Purpose:** Password recovery UX.  
-**Important findings:** Uses local timeout and success toast only.  
-**Risks:** Falsely reports email delivery.  
+**Important findings:** Now calls `forgotPasswordAction`; that action only looks up the user and returns a message.  
+**Risks:** Still falsely implies email delivery; raw caught errors are logged.  
 **Next action:** Keep unavailable or implement full signed reset/email flow.
+
+### FILE: `src/actions/auth/onboarding.ts`
+
+**Status:** Broken uncommitted addition  
+**Purpose:** Intended authenticated merchant-profile completion.  
+**Important findings:** Retrieves a session and validates input, but its wallet/audit fields do not exist in the current schema/generated client.  
+**Risks:** Type-check/build failure; incorrectly assigns `MERCHANT`/`PENDING` to any session user; no role check.  
+**Next action:** Reconcile it with `Wallet.merchantId` and `AuditLog` fields and the authorization model before enabling the page.
+
+### FILE: `src/lib/auth-client.ts`
+
+**Status:** Partial uncommitted addition  
+**Purpose:** Better Auth React client for Google UI and future session/logout use.  
+**Important findings:** Uses app-root URL/default localhost instead of the configured auth handler base.  
+**Risks:** Client calls will not necessarily reach `/api/v1/auth`; no OAuth credentials are present locally.  
+**Next action:** Align the base URL and test the complete OAuth callback/session flow.
+
+### FILES: `src/app/(public)/terms/page.tsx`, `src/app/(public)/privacy/page.tsx`
+
+**Status:** Static legal UI, uncommitted additions  
+**Purpose:** Present legal/privacy content.  
+**Important findings:** Routes now exist and registration links open them.  
+**Risks:** They state operational encryption, payout, AML, compliance, and retention facts that cannot be verified from this codebase.  
+**Next action:** Obtain legal/compliance review and align text to deployed controls.
 
 ### FILE: `src/app/(public)/page.tsx`
 
@@ -739,12 +772,12 @@ Scores are based on current executable repository evidence, not design intent.
 
 **Project:** PayERupee  
 **Current stack:** Next.js 16.2.11, React 19.2.4, TypeScript 5.9.3, Tailwind 4.3.3, Prisma 7.9.1/PostgreSQL driver adapter, Better Auth 1.6.25, Zod 4.4.3, shadcn-compatible components.  
-**Current phase:** Early foundation / pre-MVP authentication and schema scaffolding.  
+**Current phase:** Early foundation / pre-MVP authentication and schema scaffolding, with uncommitted auth/legal additions currently under development.  
 **Estimated implementation state:** Approximately 10–15% of the documented product scope, justified by the small executable surface (landing/auth UI, two actions, one auth route) versus absent merchant/admin/financial/API/operational modules.  
-**Completed:** Project UI foundation, initial auth configuration, Zod schemas/actions, broad schema draft, docs.  
-**Partially completed:** Registration/login, DB integration configuration, auth UI, wallet initialization schema/action.  
-**Not implemented:** Secure session lifecycle, authorization, KYC, real wallet/ledger, payout engine, admin, API layer, webhooks, notifications, monitoring, tests, CI/CD, migrations.  
-**Critical blockers:** Server-action session cookie handoff; no authorization; no versioned database migrations; no financial posting/ledger engine; no tests.  
+**Completed:** Project UI foundation, initial auth configuration, Zod schemas/actions, broad schema draft, docs, and static legal routes.  
+**Partially completed:** Registration/login, DB integration configuration, auth UI, wallet initialization schema/action, reset/OAuth/onboarding scaffolds.  
+**Not implemented:** Secure session lifecycle, authorization, actual reset email, working OAuth onboarding, KYC, real wallet/ledger, payout engine, admin, API layer, webhooks, notifications, monitoring, tests, CI/CD, migrations.  
+**Critical blockers:** Current onboarding action type/schema mismatch; server-action session cookie handoff; no authorization; no versioned database migrations; no financial posting/ledger engine; no tests.  
 **Highest-priority next task:** Repair and integration-test the Better Auth sign-up/sign-in session handoff, then build status/role-enforced route protection before adding merchant features.
 
 **Do not change unnecessarily:** Retain the existing baseline schema, visual auth/landing work, and response/input abstractions as starting points, but do not rely on their comments/doc claims as evidence of financial, security, or authorization correctness. Make Phase 0 fixes and establish tested invariants before expanding the feature surface.

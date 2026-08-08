@@ -8,6 +8,9 @@ export const auth = betterAuth({
     provider: "postgresql",
   }),
 
+  baseURL: env.BETTER_AUTH_URL,
+  basePath: "/api/v1/auth",
+
   emailAndPassword: {
     enabled: true,
     autoSignIn: true,
@@ -25,6 +28,4 @@ export const auth = betterAuth({
   },
 
   secret: env.BETTER_AUTH_SECRET,
-
-  baseURL: `${env.BETTER_AUTH_URL}/api/v1/auth`,
 });
