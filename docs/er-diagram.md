@@ -11,8 +11,8 @@ erDiagram
     MerchantProfile ||--o| KycApplication : submits
     
     %% Financial Ledger 
-    MerchantProfile ||--o| Wallet : accesses_cache
-    MerchantProfile ||--o| LedgerAccount : owns_liability_account
+    MerchantProfile ||--o{ LedgerAccount : owns
+    LedgerAccount ||--o| Wallet : mapped_to_cache
     
     %% Immutable Entries
     LedgerAccount ||--o{ LedgerEntry : participates_in

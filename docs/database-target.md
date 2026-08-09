@@ -2,37 +2,45 @@
 
 This document outlines the final target Prisma schema that must be implemented in Phase 1. 
 
-## 1. Authentication (Better Auth)
-- `User`: Purely manages identity (`email`, `emailVerified`). Managed by Better Auth.
-- `Session`, `Account`: Standard Better Auth tables.
+## 1. Authentication (Better Auth 1.6.25 Compatible)
+- `User`: Purely manages identity (`email`, `emailVerified`). Fully compatible with standard Better Auth 1.6.25.
+- `Session`, `Account`, `Verification`: Standard Better Auth tables.
 
 ## 2. Business Domain
 - `MerchantProfile`: (1:1 with `User`). Holds `businessName`, `address`, `phone`, `accountStatus` (PENDING, ACTIVE, SUSPENDED).
+  - **Phone Normalization:** The `phone` field is globally unique and must be stored in strict E.164 format.
 - `KycApplication`: (1:1 with `MerchantProfile`). Holds document references and `status` (PENDING_SUBMISSION, UNDER_REVIEW, APPROVED, REJECTED). 
   - **Decision:** For the current architecture, 1:1 cardinality is strictly preserved. If a KYC is rejected, the existing application record is updated and resubmitted by the merchant, rather than generating a second discrete row.
 
 ## 3. Double-Entry Accounting (The Ledger Model)
 - `Wallet`: Materialized view caching the merchant's balance for the UI. Uses `version` for optimistic locking.
-- `LedgerAccount`: Abstract accounts representing System Transit, Fee Revenue, and Merchant Liability accounts.
-- `LedgerEntry`: Immutable financial record.
-  - **Accounting Postings:** Each `LedgerEntry` represents a balanced transfer between exactly one debit account and one credit account (`debitAccountId`, `creditAccountId`, `amount`). It ensures strict double-entry balancing per record.
+  - **Ledger Connection:** Explicitly maps to a specific `LedgerAccount` via `ledgerAccountId` to ensure deterministic accounting.
+- `LedgerAccount`: Represents financial accounts.
+  - **Cardinality:** A merchant has exactly one `MERCHANT_LIABILITY` account. System accounts (`SYSTEM_TRANSIT`, `SYSTEM_REVENUE`) are global and not tied to a merchant.
+  - **Currency:** Currently INR-only, but designed to be currency-aware for future expansion.
+- `LedgerEntry`: Immutable financial record representing a balanced transfer between exactly one debit account and one credit account.
 
-## 4. Transactions
+## 4. Transactions & Payouts
 - `Payout`: Disbursal records. 
-  - **Idempotency:** Enforced via a unique compound index on the Payout itself: `@@unique([merchantProfileId, idempotencyKey])`. There is no separate IdempotencyKey table.
-  - **Ledger Relationship:** A single Payout can generate one-to-many (`1..N`) `LedgerEntry` records. This is an intentional decision to support fees: Entry 1 transfers the principal, and Entry 2 transfers the payout fee.
+  - **Idempotency:** Enforced via a unique compound index: `@@unique([merchantProfileId, idempotencyKey])`.
+  - **Accounting Definitions:**
+    - `amount`: The principal amount the beneficiary receives.
+    - `fee`: The service charge levied by PayERupee.
+    - `tax`: The GST applied to the fee.
+    - `netAmount`: `amount + fee + tax`. This is the exact total debited from the merchant wallet.
 - `AuditLog`: Tracks all critical operational mutations. 
-  - **Minimum Conceptual Information:** Records `actor` (who did it), `action` (what happened), `entity type` (e.g., MerchantProfile), `entity ID` (the affected record ID), `metadata` (JSON snapshot), and `timestamp`.
+  - **Actor:** Evaluates `actorId` (nullable, allowing SYSTEM actions) and `actorType` (ADMIN, MERCHANT, SYSTEM) rather than strictly an `adminId`.
 
 ## 5. Financial Invariants
-The following rules are absolute and must be enforced at the data access boundary:
-- **Decimal Only:** All monetary values must use `Decimal` (`db.Decimal(18, 4)`).
-- **No Float:** Floating-point representations (`Float`) are strictly prohibited.
-- **Immutability:** `LedgerEntry` records are strictly immutable.
-- **Cache vs Source of Truth:** `Wallet.balance` is a materialized/cache value for UI speed, not the accounting source of truth.
-- **Source of Truth:** The `LedgerEntry` history is the ultimate financial source of truth.
-- **Atomicity:** `Wallet` mutation and `LedgerEntry` mutation must occur atomically in a single database transaction.
-- **Zero-Sum:** Every financial transaction (`LedgerEntry`) must balance (debits = credits).
-- **Idempotency:** Payout idempotency is rigidly enforced by the database via `merchantProfileId + idempotencyKey`.
-- **Concurrency:** Concurrent financial mutations must be transactionally safe (utilizing optimistic locking on Wallet).
-- **No Hard Deletes:** Financial records (`LedgerEntry`, `Payout`, `Wallet`) must not be hard-deleted.\n
+The following rules are absolute and must be enforced at the data access boundary (via Prisma and database-level `CHECK` constraints in subsequent migrations):
+1. **Decimal Only:** All monetary values must use `Decimal` (`db.Decimal(18, 4)`). No `Float` allowed.
+2. **Immutability:** `LedgerEntry` records are strictly immutable. No updates. No deletes.
+3. **Reversals:** Corrections happen exclusively through offsetting reversal entries.
+4. **Strict Positivity:** `LedgerEntry.amount` must be strictly > 0.
+5. **No Self-Dealing:** `debitAccountId` must not equal `creditAccountId`.
+6. **Cache vs Source of Truth:** `Wallet.balance` is a materialized/cache value. `LedgerEntry` history is the ultimate financial source of truth.
+7. **Atomicity:** `Wallet` mutation and `LedgerEntry` mutation must occur atomically in a single database transaction.
+8. **Zero-Sum:** Every financial transaction (`LedgerEntry`) must strictly balance (debits = credits).
+9. **Idempotency:** Payout idempotency is rigidly enforced via `merchantProfileId + idempotencyKey`.
+10. **Concurrency:** Concurrent financial mutations must be transactionally safe (optimistic locking on Wallet).
+11. **No Hard Deletes:** Financial and compliance records (`LedgerEntry`, `Payout`, `Wallet`, `Blacklist`, `SupportTicket`) enforce `onDelete: Restrict`.\n
