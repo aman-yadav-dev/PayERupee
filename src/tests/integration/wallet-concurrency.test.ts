@@ -42,9 +42,7 @@ describe("Wallet Service Concurrency (Integration)", () => {
     testWalletId = wallet.id;
   });
 
-  afterAll(async () => {
-    await db.$disconnect();
-  });
+
 
   it("should successfully adjust balance sequentially", async () => {
     const wallet = await db.wallet.findUniqueOrThrow({ where: { id: testWalletId } });
@@ -160,9 +158,7 @@ describe("Wallet/Ledger Reconciliation (Integration)", () => {
     testWalletId = wallet.id;
   });
 
-  afterAll(async () => {
-    await db.$disconnect();
-  });
+
 
   it("should succeed reconciliation when Wallet.balance exactly matches Ledger (Credits - Debits)", async () => {
     const { expectedBalance, wallet } = await reconcileWalletBalance(testWalletId, testMerchantId);

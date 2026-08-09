@@ -184,7 +184,7 @@ export async function processPayout(payoutId: string, merchantProfileId: string)
     }, tx);
 
     return updatedPayout;
-  });
+  }, { maxWait: 5000, timeout: 20000 });
 }
 
 export async function handlePayoutSuccess(payoutId: string, merchantProfileId: string, providerReference?: string) {
@@ -213,10 +213,10 @@ export async function handlePayoutSuccess(payoutId: string, merchantProfileId: s
     }, tx);
 
     return updated;
-  });
+  }, { maxWait: 5000, timeout: 20000 });
 }
 
-export async function reversePayout(payoutId: string, merchantProfileId: string, reason?: string) {
+export async function failPayout(payoutId: string, merchantProfileId: string, reason?: string) {
   return await db.$transaction(async (tx) => {
     const payout = await tx.payout.findUnique({ where: { id: payoutId, merchantProfileId } });
     if (!payout) throw new Error("Payout not found");
@@ -234,7 +234,7 @@ export async function reversePayout(payoutId: string, merchantProfileId: string,
     // Transition to FAILED
     const updatedPayout = await tx.payout.update({
       where: { id: payoutId, merchantProfileId, status: PayoutStatus.PROCESSING },
-      data: { 
+      data: {
         status: PayoutStatus.FAILED,
         failureReason: reason,
         processedAt: new Date(),
@@ -285,5 +285,77 @@ export async function reversePayout(payoutId: string, merchantProfileId: string,
     }, tx);
 
     return updatedPayout;
-  });
+  }, { maxWait: 5000, timeout: 20000 });
+}
+
+export async function reversePayout(payoutId: string, merchantProfileId: string, reason?: string) {
+  return await db.$transaction(async (tx) => {
+    const payout = await tx.payout.findUnique({ where: { id: payoutId, merchantProfileId } });
+    if (!payout) throw new Error("Payout not found");
+    if (payout.status !== PayoutStatus.SUCCESS) {
+      throw new IllegalStateTransitionError(payout.status, PayoutStatus.REVERSED);
+    }
+
+    const wallet = await tx.wallet.findUnique({ where: { merchantProfileId } });
+    if (!wallet) throw new Error("Wallet not found");
+
+    const transitAccount = await tx.ledgerAccount.findFirst({ where: { type: "SYSTEM_TRANSIT" } });
+    const revenueAccount = await tx.ledgerAccount.findFirst({ where: { type: "SYSTEM_REVENUE" } });
+    if (!transitAccount || !revenueAccount) throw new Error("System accounts missing");
+
+    // Transition to REVERSED
+    const updatedPayout = await tx.payout.update({
+      where: { id: payoutId, merchantProfileId, status: PayoutStatus.SUCCESS },
+      data: {
+        status: PayoutStatus.REVERSED,
+        failureReason: reason,
+        processedAt: new Date(),
+      }
+    });
+
+    // Compensating Ledgers
+    await createLedgerEntry({
+      amount: payout.amount,
+      creditAccountId: wallet.ledgerAccountId,
+      debitAccountId: transitAccount.id,
+      purpose: LedgerEntryPurpose.REVERSAL_PRINCIPAL,
+      referenceType: ReferenceType.PAYOUT,
+      referenceId: payout.id,
+      payoutId: payout.id,
+      description: "Payout Reversal Principal",
+    }, tx);
+
+    const feeAndTax = payout.fee.add(payout.tax);
+    if (feeAndTax.gt(0)) {
+      await createLedgerEntry({
+        amount: feeAndTax,
+        creditAccountId: wallet.ledgerAccountId,
+        debitAccountId: revenueAccount.id,
+        purpose: LedgerEntryPurpose.REVERSAL_FEE_AND_TAX,
+        referenceType: ReferenceType.PAYOUT,
+        referenceId: payout.id,
+        payoutId: payout.id,
+        description: "Payout Reversal Fee & Tax",
+      }, tx);
+    }
+
+    // Adjust Wallet Back
+    await adjustWalletBalance(
+      wallet.id,
+      merchantProfileId,
+      payout.totalDebitAmount, // POSITIVE amount to refund
+      wallet.version,
+      tx
+    );
+
+    await logAction({
+      actorType: AuditActorType.SYSTEM,
+      entityType: AuditEntity.PAYOUT,
+      entityId: payout.id,
+      action: AuditAction.UPDATE,
+      metadata: { status: "REVERSED", reason }
+    }, tx);
+
+    return updatedPayout;
+  }, { maxWait: 5000, timeout: 20000 });
 }

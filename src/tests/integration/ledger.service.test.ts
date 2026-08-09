@@ -21,9 +21,7 @@ describe("Ledger Service Invariants (Integration)", () => {
     revenueAccountId = revenue.id;
   });
 
-  afterAll(async () => {
-    await db.$disconnect();
-  });
+
 
   it("should successfully create a valid ledger entry", async () => {
     const entry = await createLedgerEntry({

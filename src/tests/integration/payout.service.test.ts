@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { Prisma, LedgerAccountType, PaymentMode, LedgerEntryPurpose, ReferenceType } from "@prisma/client";
 import { adjustWalletBalance, OptimisticLockError, reconcileWalletBalance, ReconciliationError } from "@/lib/services/wallet.service";
 import { onboardMerchant } from "@/lib/services/merchant.service";
-import { createPayout, processPayout, reversePayout, handlePayoutSuccess, IllegalStateTransitionError, SystemConfigurationError } from "@/lib/services/payout.service";
+import { createPayout, processPayout, failPayout, handlePayoutSuccess, IllegalStateTransitionError, SystemConfigurationError } from "@/lib/services/payout.service";
 import crypto from "crypto";
 
 const uuidv4 = () => crypto.randomUUID();
@@ -66,9 +66,7 @@ describe("Payout Service Integration (Phase 3.1)", () => {
     });
   });
 
-  afterAll(async () => {
-    await db.$disconnect();
-  });
+
 
   const validPayoutData = () => ({
     idempotencyKey: uuidv4(),
@@ -145,12 +143,12 @@ describe("Payout Service Integration (Phase 3.1)", () => {
     const { payout } = await createPayout(merchantId, data);
     await processPayout(payout.id, merchantId);
     
-    const reversed = await reversePayout(payout.id, merchantId, "Failed by provider");
+    const reversed = await failPayout(payout.id, merchantId, "Failed by provider");
     expect(reversed.status).toBe("FAILED");
 
     const { expectedBalance, wallet } = await reconcileWalletBalance(walletId, merchantId);
     expect(wallet.balance.toString()).toBe(expectedBalance.toString());
 
-    await expect(reversePayout(payout.id, merchantId, "Double")).rejects.toThrow(IllegalStateTransitionError);
+    await expect(failPayout(payout.id, merchantId, "Double")).rejects.toThrow(IllegalStateTransitionError);
   });
 });
