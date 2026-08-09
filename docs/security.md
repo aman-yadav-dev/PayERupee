@@ -1,9 +1,16 @@
 # Security Architecture
 
-## The Middlewares Misconception
-- **Middleware** acts as a coarse-grained UI bouncer (e.g., redirecting unauthenticated users to `/login`).
-- **True Security** lives server-side in the **Service Layer**. A Service must always assume the caller is malicious and re-verify `merchant.accountStatus === ACTIVE`.
+## Defense in Depth
 
-## Idempotency
-- All state-mutating financial endpoints (e.g., `/api/v1/payouts`) require an `Idempotency-Key` header.
-- Handled via a unique constraint in PostgreSQL to prevent double-spending from network retries.\n
+1. **Input Validation (Zod):** 
+   - All external inputs (Server Actions, API Routes) are strictly validated against Zod schemas in `src/schemas/` before any logic executes.
+   
+2. **Authorization (Services):**
+   - Financial services verify the merchant's `accountStatus` and RBAC permissions. Middleware is NOT a security boundary for data mutation.
+
+3. **Database Integrity (Prisma):**
+   - Transactions (`db.$transaction`) ensure atomic updates.
+   - Optimistic locking prevents race conditions.
+
+4. **API Security:**
+   - External programmatic APIs (`/api/v1/payouts`) are secured via HMAC SHA-256 signatures using the merchant's `Secret Key`, preventing replay attacks and payload tampering.\n

@@ -1,7 +1,18 @@
-# Final Architecture Review Report
+# Final Architecture Review & Audit Report
 
-1. **Executive Summary:** PayERupee is transitioning to a strict Service-Oriented Architecture with a double-entry financial ledger to ensure scale and integrity.
-2. **Current Project Status:** Authentication UI is built, but backend actions are monolithic.
-3. **Target Architecture:** UI -> Controllers -> Services -> Prisma.
-4. **Financial Security:** Ledger is immutable. Floating points are banned. Idempotency is required.
-5. **Next Steps:** Do not write new features until the existing auth actions are refactored into the `src/services/` pattern.\n
+## Executive Summary
+A comprehensive audit of the PayERupee repository has been completed. While the foundational Next.js and Better Auth scaffolding is operational, the current architecture suffers from severe "Fat Action" anti-patterns and mixes authentication concerns with domain concerns in the database. 
+
+## Audit Discrepancies (Current vs Target)
+1. **No Service Layer:** Business logic and Prisma transactions are improperly housed inside Next.js Server Actions.
+2. **Auth vs Domain Mixing:** The Prisma `User` model currently handles both Better Auth identity and Merchant business fields, violating the Single Responsibility Principle.
+3. **Single-Entry Ledger:** The current `WalletTransaction` model lacks standard double-entry (Debit/Credit) balancing accounts.
+
+## Target Architecture
+The project must transition to a 4-Layer Service-Oriented Architecture (UI $\rightarrow$ Controller $\rightarrow$ Service $\rightarrow$ Prisma), implement a strict double-entry ledger using `Decimal` types, and isolate Better Auth purely to identity management.
+
+## Immediate Next Steps (DO NOT FIX YET)
+When implementation begins, the exact order of operations must be:
+1. **Phase 1:** Restructure the Prisma Schema to isolate `MerchantProfile` and establish the double-entry `LedgerEntry` models.
+2. **Phase 2:** Create the `src/services/` directory and abstract all logic out of the current auth server actions.
+3. **Phase 3:** Reconnect the UI Server Actions to the new Services.\n
