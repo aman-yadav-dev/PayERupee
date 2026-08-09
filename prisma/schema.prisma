@@ -17,11 +17,18 @@ enum UserRole {
   MERCHANT
 }
 
-enum UserStatus {
+enum AccountStatus {
   PENDING
   ACTIVE
   SUSPENDED
   DELETED
+}
+
+enum KycStatus {
+  PENDING_SUBMISSION
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
 }
 
 enum Currency {
@@ -50,18 +57,18 @@ enum Environment {
   LIVE
 }
 
-enum TransactionType {
-  CREDIT
-  DEBIT
+enum LedgerAccountType {
+  MERCHANT_LIABILITY
+  SYSTEM_TRANSIT
+  SYSTEM_REVENUE
 }
 
-enum TransactionCategory {
-  FUND_ADD
-  PAYOUT
-  FEE
-  TAX
-  REFUND
-  ADJUSTMENT
+enum LedgerEntryPurpose {
+  PRINCIPAL
+  FEE_AND_TAX
+  REVERSAL_PRINCIPAL
+  REVERSAL_FEE_AND_TAX
+  MANUAL_ADJUSTMENT
 }
 
 enum ReferenceType {
@@ -84,12 +91,22 @@ enum PayoutStatus {
   REVERSED
 }
 
+enum AuditActorType {
+  SYSTEM
+  ADMIN
+  MERCHANT
+}
+
 enum AuditEntity {
   USER
+  MERCHANT_PROFILE
+  KYC_APPLICATION
   PAYOUT
   FUND_REQUEST
   API_KEY
   WALLET
+  LEDGER_ACCOUNT
+  LEDGER_ENTRY
   BLACKLIST
   SUPPORT
   SYSTEM
@@ -128,52 +145,31 @@ enum TicketPriority {
 }
 
 // -----------------------------------------------------------------------------
-// AUTHENTICATION MODELS (BETTER AUTH SCHEMA + FINTECH EXTENSIONS)
+// AUTHENTICATION MODELS (BETTER AUTH 1.6.25 COMPATIBLE)
 // -----------------------------------------------------------------------------
 model User {
-  id            String    @id @default(cuid())
+  id            String   @id @default(cuid())
   name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false)
+  email         String   @unique
+  emailVerified Boolean  @default(false)
   image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  // Better Auth Relations
-  sessions      Session[]
-  accounts      Account[]
+  role UserRole @default(MERCHANT)
 
-  // --- FINTECH EXTENSIONS ---
-  businessName  String?     @db.VarChar(150)
-  address       String?     
-  role          UserRole    @default(MERCHANT)
-  status        UserStatus  @default(PENDING)
-  phone         String?     @unique @db.VarChar(15) 
-  kycApprovedAt DateTime?
-  deletedAt     DateTime?   
+  sessions Session[]
+  accounts Account[]
 
-  // Financial Relations
-  wallet              Wallet?
-  apiKeys             ApiKey[]            @relation("MerchantApiKeys")
-  payouts             Payout[]
-  auditLogs           AuditLog[]          @relation("AdminAudits")
-  
-  // Fund Request Relations
-  fundRequests        FundRequest[]       @relation("MerchantFundRequests")
-  approvedRequests    FundRequest[]       @relation("AdminFundApprovals")
-  createdFundRequests FundRequest[]       @relation("AdminCreatedFundRequests")
-  
-  // Creation Tracking
-  createdApiKeys      ApiKey[]            @relation("AdminCreatedApiKeys")
+  merchantProfile MerchantProfile?
 
-  // Blacklist & Support Relations
-  merchantBlacklists  Blacklist[]         @relation("MerchantBlacklists")
-  adminBlacklists     Blacklist[]         @relation("AdminBlacklists")
-  supportTickets      SupportTicket[]     @relation("MerchantSupportTickets")
-  supportMessages     SupportMessage[]    @relation("UserSupportMessages")
-  settingsUpdates     SystemSetting[]     @relation("AdminSettingsUpdates")
+  createdApiKeys      ApiKey[]         @relation("AdminCreatedApiKeys")
+  createdFundRequests FundRequest[]    @relation("AdminCreatedFundRequests")
+  approvedRequests    FundRequest[]    @relation("AdminFundApprovals")
+  adminBlacklists     Blacklist[]      @relation("AdminBlacklists")
+  supportMessages     SupportMessage[] @relation("UserSupportMessages")
+  settingsUpdates     SystemSetting[]  @relation("AdminSettingsUpdates")
 
-  @@index([deletedAt])
   @@map("users")
 }
 
@@ -226,239 +222,306 @@ model Verification {
 }
 
 // -----------------------------------------------------------------------------
-// FINTECH CORE MODELS
+// BUSINESS DOMAIN MODELS
 // -----------------------------------------------------------------------------
 
-model ApiKey {
-  id          String      @id @default(cuid())
-  merchantId  String
-  createdById String?
-  environment Environment @default(LIVE)
-  name        String      @db.VarChar(50)
-  keyPrefix   String      @db.VarChar(50)
-  lastFour    String      // Masked display (e.g. A93K)
-  keyHash     String      @unique 
-  isActive    Boolean     @default(true)
-  
-  lastUsedAt  DateTime?
-  expiresAt   DateTime?
-  revokedAt   DateTime?
-  
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  deletedAt   DateTime?
+model MerchantProfile {
+  id            String        @id @default(cuid())
+  userId        String        @unique
+  businessName  String?       @db.VarChar(150)
+  address       String?
+  phone         String?       @unique @db.VarChar(15)
+  accountStatus AccountStatus @default(PENDING)
 
-  merchant    User        @relation("MerchantApiKeys", fields: [merchantId], references: [id], onDelete: Restrict)
-  createdBy   User?       @relation("AdminCreatedApiKeys", fields: [createdById], references: [id], onDelete: SetNull)
+  kycApprovedAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
 
-  @@index([merchantId, isActive])
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  kycApplication KycApplication?
+  wallet         Wallet?
+  ledgerAccounts LedgerAccount[]
+
+  apiKeys        ApiKey[]
+  payouts        Payout[]
+  fundRequests   FundRequest[]
+  blacklists     Blacklist[]
+  supportTickets SupportTicket[]
+
   @@index([deletedAt])
-  @@map("api_keys")
+  @@map("merchant_profiles")
 }
 
-// Cached balance. 
-// Source of truth is always the WalletTransaction ledger.
+model KycApplication {
+  id                String    @id @default(cuid())
+  merchantProfileId String    @unique
+  documentUrls      Json
+  status            KycStatus @default(PENDING_SUBMISSION)
+
+  submittedAt DateTime?
+  reviewedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  merchantProfile MerchantProfile @relation(fields: [merchantProfileId], references: [id], onDelete: Restrict)
+
+  @@map("kyc_applications")
+}
+
+// -----------------------------------------------------------------------------
+// DOUBLE-ENTRY LEDGER SYSTEM
+// -----------------------------------------------------------------------------
+
+model LedgerAccount {
+  id                String            @id @default(cuid())
+  merchantProfileId String?
+  type              LedgerAccountType
+  currency          Currency          @default(INR)
+  isActive          Boolean           @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  merchantProfile MerchantProfile? @relation(fields: [merchantProfileId], references: [id], onDelete: Restrict)
+  wallet          Wallet?
+
+  debitEntries  LedgerEntry[] @relation("DebitAccount")
+  creditEntries LedgerEntry[] @relation("CreditAccount")
+
+  @@unique([merchantProfileId, type, currency])
+  @@index([type])
+  @@map("ledger_accounts")
+}
+
 model Wallet {
-  id          String   @id @default(cuid())
-  merchantId  String   @unique
-  currency    Currency @default(INR)
-  balance     Decimal  @default(0.0000) @db.Decimal(18, 4)
-  isActive    Boolean  @default(true)
-  version     Int      @default(1) // Optimistic locking to prevent race conditions
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                String   @id @default(cuid())
+  merchantProfileId String   @unique
+  ledgerAccountId   String   @unique
+  currency          Currency @default(INR)
+  balance           Decimal  @default(0.0000) @db.Decimal(18, 4)
+  isActive          Boolean  @default(true)
+  version           Int      @default(1)
 
-  merchant    User     @relation(fields: [merchantId], references: [id], onDelete: Restrict)
-  transactions WalletTransaction[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@index([merchantId])
+  merchantProfile MerchantProfile @relation(fields: [merchantProfileId], references: [id], onDelete: Restrict)
+  ledgerAccount   LedgerAccount   @relation(fields: [ledgerAccountId], references: [id], onDelete: Restrict)
+
   @@map("wallets")
 }
 
-// THE IMMUTABLE LEDGER
-model WalletTransaction {
-  id                String              @id @default(cuid())
-  walletId          String
-  type              TransactionType     
-  category          TransactionCategory 
-  amount            Decimal             @db.Decimal(18, 4)
-  fee               Decimal?            @db.Decimal(18, 4)
-  tax               Decimal?            @db.Decimal(18, 4)
-  balanceAfter      Decimal             @db.Decimal(18, 4) 
-  
-  referenceType     ReferenceType
-  referenceId       String?             // Nullable for manual system adjustments             
-  externalReference String?             // UTR, RRN, NPCI Reference, etc.
-  description       String              
-  
-  createdAt         DateTime            @default(now()) // Immutable: No updatedAt
+model LedgerEntry {
+  id     String  @id @default(cuid())
+  amount Decimal @db.Decimal(18, 4)
 
-  wallet            Wallet              @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  debitAccountId  String
+  creditAccountId String
+  payoutId        String?
+  purpose         LedgerEntryPurpose
 
-  @@index([walletId, createdAt(sort: Desc)])
+  referenceType ReferenceType
+  referenceId   String?
+  description   String
+
+  createdAt DateTime @default(now())
+
+  debitAccount  LedgerAccount @relation("DebitAccount", fields: [debitAccountId], references: [id], onDelete: Restrict)
+  creditAccount LedgerAccount @relation("CreditAccount", fields: [creditAccountId], references: [id], onDelete: Restrict)
+  payout        Payout?       @relation(fields: [payoutId], references: [id], onDelete: Restrict)
+
+  @@unique([payoutId, purpose])
+  @@index([debitAccountId])
+  @@index([creditAccountId])
   @@index([referenceType, referenceId])
-  @@index([category])
-  @@map("wallet_transactions")
+  @@map("ledger_entries")
+}
+
+// -----------------------------------------------------------------------------
+// TRANSACTIONS & OPERATIONS
+// -----------------------------------------------------------------------------
+
+model Payout {
+  id                String  @id @default(cuid())
+  merchantProfileId String
+  idempotencyKey    String
+  batchId           String?
+
+  amount           Decimal @db.Decimal(18, 4)
+  fee              Decimal @default(0.0000) @db.Decimal(18, 4)
+  tax              Decimal @default(0.0000) @db.Decimal(18, 4)
+  totalDebitAmount Decimal @db.Decimal(18, 4)
+
+  status      PayoutStatus    @default(PENDING)
+  paymentMode PaymentMode     @default(IMPS)
+  provider    PayoutProvider?
+
+  accountNumber     String  @db.VarChar(30)
+  ifscCode          String  @db.VarChar(11)
+  accountHolderName String
+  beneficiaryPhone  String?
+
+  merchantReference String? @db.VarChar(100)
+  providerReference String?
+  bankReference     String? @unique
+  notes             String?
+  failureReason     String?
+
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  merchantProfile MerchantProfile @relation(fields: [merchantProfileId], references: [id], onDelete: Restrict)
+  ledgerEntries   LedgerEntry[]
+
+  @@unique([merchantProfileId, idempotencyKey])
+  @@index([merchantProfileId, createdAt(sort: Desc)])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("payouts")
 }
 
 model FundRequest {
-  id              String            @id @default(cuid())
-  merchantId      String
-  createdById     String?           // Track if an Admin created this on behalf of a merchant
-  approvedById    String?
-  
+  id                String  @id @default(cuid())
+  merchantProfileId String
+  createdById       String?
+  approvedById      String?
+
   amount          Decimal           @db.Decimal(18, 4)
   status          FundRequestStatus @default(PENDING)
   paymentMode     PaymentMode       @default(UPI)
-  utrNumber       String            @unique 
+  utrNumber       String            @unique
   receiptUrl      String?
   remarks         String?
   rejectionReason String?
-  
-  processedAt     DateTime?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  deletedAt       DateTime?
 
-  merchant        User              @relation("MerchantFundRequests", fields: [merchantId], references: [id], onDelete: Restrict)
-  createdBy       User?             @relation("AdminCreatedFundRequests", fields: [createdById], references: [id], onDelete: SetNull)
-  approvedBy      User?             @relation("AdminFundApprovals", fields: [approvedById], references: [id], onDelete: Restrict)
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
 
-  @@index([merchantId, status])
-  @@index([createdAt])
+  merchantProfile MerchantProfile @relation(fields: [merchantProfileId], references: [id], onDelete: Restrict)
+  createdBy       User?           @relation("AdminCreatedFundRequests", fields: [createdById], references: [id], onDelete: SetNull)
+  approvedBy      User?           @relation("AdminFundApprovals", fields: [approvedById], references: [id], onDelete: Restrict)
+
+  @@index([merchantProfileId, status])
   @@index([deletedAt])
   @@map("fund_requests")
-}
-
-model Payout {
-  id                  String          @id @default(cuid())
-  merchantId          String
-  idempotencyKey      String       
-  batchId             String?      
-  
-  amount              Decimal         @db.Decimal(18, 4)
-  fee                 Decimal         @default(0.0000) @db.Decimal(18, 4)
-  tax                 Decimal         @default(0.0000) @db.Decimal(18, 4)
-  netAmount           Decimal         @db.Decimal(18, 4) 
-  
-  status              PayoutStatus    @default(PENDING)
-  paymentMode         PaymentMode     @default(IMPS)
-  provider            PayoutProvider? 
-  
-  // Beneficiary Data (Direct for MVP)
-  accountNumber       String          @db.VarChar(30)
-  ifscCode            String          @db.VarChar(11)
-  accountHolderName   String
-  beneficiaryPhone    String?
-  
-  // References & Notes
-  merchantReference   String?         @db.VarChar(100)
-  providerReference   String?         // ID returned by upstream provider
-  bankReference       String?         @unique 
-  notes               String?
-  failureReason       String?
-  
-  processedAt         DateTime?
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
-  deletedAt           DateTime?
-
-  merchant            User            @relation(fields: [merchantId], references: [id], onDelete: Restrict)
-
-  @@unique([merchantId, idempotencyKey])
-  @@index([merchantId, createdAt(sort: Desc)])
-  @@index([merchantId, status])
-  @@index([status])
-  @@index([batchId])
-  @@index([deletedAt])
-  @@map("payouts")
 }
 
 // -----------------------------------------------------------------------------
 // FRAUD, SECURITY & COMPLIANCE
 // -----------------------------------------------------------------------------
 
+model ApiKey {
+  id                String      @id @default(cuid())
+  merchantProfileId String
+  createdById       String?
+  environment       Environment @default(LIVE)
+  name              String      @db.VarChar(50)
+  keyPrefix         String      @db.VarChar(50)
+  lastFour          String
+  keyHash           String      @unique
+  isActive          Boolean     @default(true)
+
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  revokedAt  DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  merchantProfile MerchantProfile @relation(fields: [merchantProfileId], references: [id], onDelete: Restrict)
+  createdBy       User?           @relation("AdminCreatedApiKeys", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([merchantProfileId, isActive])
+  @@index([deletedAt])
+  @@map("api_keys")
+}
+
 model Blacklist {
-  id          String        @id @default(cuid())
-  merchantId  String?       // Null = Global Admin Ban across all merchants
-  type        BlacklistType
-  value       String        @unique // UPI ID or Account Number
-  reason      String?
-  addedById   String
+  id                String        @id @default(cuid())
+  merchantProfileId String?
+  type              BlacklistType
+  value             String        @unique
+  reason            String?
+  addedById         String
 
-  merchant    User?         @relation("MerchantBlacklists", fields: [merchantId], references: [id], onDelete: Cascade)
-  addedBy     User          @relation("AdminBlacklists", fields: [addedById], references: [id], onDelete: Restrict)
+  merchantProfile MerchantProfile? @relation(fields: [merchantProfileId], references: [id], onDelete: Restrict)
+  addedBy         User             @relation("AdminBlacklists", fields: [addedById], references: [id], onDelete: Restrict)
 
-  createdAt   DateTime      @default(now())
+  createdAt DateTime @default(now())
 
   @@index([type, value])
   @@map("blacklists")
 }
 
 model SupportTicket {
-  id          String           @id @default(cuid())
-  merchantId  String
-  subject     String
-  status      TicketStatus     @default(OPEN)
-  priority    TicketPriority   @default(NORMAL)
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  id                String         @id @default(cuid())
+  merchantProfileId String
+  subject           String
+  status            TicketStatus   @default(OPEN)
+  priority          TicketPriority @default(NORMAL)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 
-  merchant    User             @relation("MerchantSupportTickets", fields: [merchantId], references: [id], onDelete: Cascade)
-  messages    SupportMessage[]
+  merchantProfile MerchantProfile  @relation(fields: [merchantProfileId], references: [id], onDelete: Restrict)
+  messages        SupportMessage[]
 
-  @@index([merchantId, status])
+  @@index([merchantProfileId, status])
   @@map("support_tickets")
 }
 
 model SupportMessage {
-  id          String        @id @default(cuid())
-  ticketId    String
-  senderId    String
-  isAdmin     Boolean       @default(false)
-  message     String        @db.Text
-  createdAt   DateTime      @default(now())
+  id        String   @id @default(cuid())
+  ticketId  String
+  senderId  String
+  isAdmin   Boolean  @default(false)
+  message   String   @db.Text
+  createdAt DateTime @default(now())
 
-  ticket      SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  sender      User          @relation("UserSupportMessages", fields: [senderId], references: [id], onDelete: Restrict)
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender User          @relation("UserSupportMessages", fields: [senderId], references: [id], onDelete: Restrict)
 
   @@index([ticketId, createdAt(sort: Asc)])
   @@map("support_messages")
 }
 
 model SystemSetting {
-  id                String      @id @default("GLOBAL_SETTINGS")
-  upiPayoutFee      Decimal     @default(0.0000) @db.Decimal(18, 4)
-  impsPayoutFee     Decimal     @default(0.0000) @db.Decimal(18, 4)
-  neftPayoutFee     Decimal     @default(0.0000) @db.Decimal(18, 4)
-  rtgsPayoutFee     Decimal     @default(0.0000) @db.Decimal(18, 4)
-  taxPercentage     Decimal     @default(0.00) @db.Decimal(5, 2) // e.g. 18.00 for 18% GST
-  minPayoutAmount   Decimal     @default(100.0000) @db.Decimal(18, 4)
-  maxPayoutAmount   Decimal     @default(500000.0000) @db.Decimal(18, 4)
-  updatedAt         DateTime    @updatedAt
-  updatedById       String?
+  id              String   @id @default("GLOBAL_SETTINGS")
+  upiPayoutFee    Decimal  @default(0.0000) @db.Decimal(18, 4)
+  impsPayoutFee   Decimal  @default(0.0000) @db.Decimal(18, 4)
+  neftPayoutFee   Decimal  @default(0.0000) @db.Decimal(18, 4)
+  rtgsPayoutFee   Decimal  @default(0.0000) @db.Decimal(18, 4)
+  taxPercentage   Decimal  @default(0.00) @db.Decimal(5, 2)
+  minPayoutAmount Decimal  @default(100.0000) @db.Decimal(18, 4)
+  maxPayoutAmount Decimal  @default(500000.0000) @db.Decimal(18, 4)
+  updatedAt       DateTime @updatedAt
+  updatedById     String?
 
-  updatedBy         User?       @relation("AdminSettingsUpdates", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("AdminSettingsUpdates", fields: [updatedById], references: [id], onDelete: SetNull)
 
   @@map("system_settings")
 }
 
 model AuditLog {
-  id          String      @id @default(cuid())
-  adminId     String
-  entityType  AuditEntity
-  entityId    String   
-  action      AuditAction
-  ipAddress   String?
-  userAgent   String?
-  metadata    Json?    
-  
-  createdAt   DateTime    @default(now())
+  id         String         @id @default(cuid())
+  actorType  AuditActorType
+  actorId    String?
+  entityType AuditEntity
+  entityId   String
+  action     AuditAction
+  ipAddress  String?
+  userAgent  String?
+  metadata   Json?
 
-  admin       User        @relation("AdminAudits", fields: [adminId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
 
-  @@index([adminId, createdAt(sort: Desc)])
+  @@index([actorId, createdAt(sort: Desc)])
   @@index([entityType, entityId])
   @@index([action])
   @@map("audit_logs")
