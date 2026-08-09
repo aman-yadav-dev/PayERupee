@@ -2,21 +2,23 @@ import { PrismaClient } from "@prisma/client";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 
-// Instantiate the Postgres connection pool
+declare global {
+  var prismaGlobal: undefined | ReturnType<typeof prismaClientSingleton>;
+  var pgPoolGlobal: undefined | Pool;
+}
+
 const connectionString = process.env.DATABASE_URL;
 
-const prismaClientSingleton = () => {
-  const pool = new Pool({ connectionString });
-  const adapter = new PrismaPg(pool);
+export const pool = globalThis.pgPoolGlobal ?? new Pool({ connectionString });
 
-  // Pass the adapter to the Prisma Client constructor
+const prismaClientSingleton = () => {
+  const adapter = new PrismaPg(pool);
   return new PrismaClient({ adapter });
 };
 
-declare global {
-  var prismaGlobal: undefined | ReturnType<typeof prismaClientSingleton>;
-}
-
 export const db = globalThis.prismaGlobal ?? prismaClientSingleton();
 
-if (process.env.NODE_ENV !== "production") globalThis.prismaGlobal = db;
+if (process.env.NODE_ENV !== "production") {
+  globalThis.prismaGlobal = db;
+  globalThis.pgPoolGlobal = pool;
+}

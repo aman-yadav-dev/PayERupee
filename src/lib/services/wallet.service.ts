@@ -35,6 +35,16 @@ export async function adjustWalletBalance(
   tx: Prisma.TransactionClient = db
 ) {
   try {
+    // 1. Pre-check: fail early if obviously insufficient
+    if (amountDelta.lt(0)) {
+      const currentWallet = await tx.wallet.findUnique({
+        where: { id: walletId, merchantProfileId }
+      });
+      if (!currentWallet || currentWallet.balance.add(amountDelta).lt(0)) {
+        throw new InsufficientFundsError();
+      }
+    }
+
     const updatedWallet = await tx.wallet.update({
       where: {
         id: walletId,

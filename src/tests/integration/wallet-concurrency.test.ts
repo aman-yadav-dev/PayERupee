@@ -65,24 +65,36 @@ describe("Wallet Service Concurrency (Integration)", () => {
     const wallet = await db.wallet.findUniqueOrThrow({ where: { id: testWalletId } });
     const initialVersion = wallet.version;
 
-    // 2. First adjustment succeeds
-    const firstAdjustment = await adjustWalletBalance(
-      wallet.id,
-      wallet.merchantProfileId,
-      new Decimal("-50"),
-      initialVersion
-    );
-    expect(firstAdjustment.version).toBe(initialVersion + 1);
-
-    // 3. Second adjustment using the STALE initial version MUST fail
-    await expect(
+    // 2. Fire 5 concurrent requests sharing the EXACT same version
+    const promises = Array.from({ length: 5 }).map(() =>
       adjustWalletBalance(
         wallet.id,
         wallet.merchantProfileId,
-        new Decimal("-50"),
+        new Decimal("-10"),
         initialVersion
       )
-    ).rejects.toThrow(OptimisticLockError);
+    );
+
+    const results = await Promise.allSettled(promises);
+
+    // EXACTLY 1 should succeed, 4 should fail with OptimisticLockError
+    const fulfilled = results.filter(r => r.status === "fulfilled");
+    const rejected = results.filter(r => r.status === "rejected");
+
+    expect(fulfilled.length).toBe(1);
+    expect(rejected.length).toBe(4);
+
+    rejected.forEach((r: any) => {
+      if (r.reason instanceof OptimisticLockError) {
+        expect(r.reason).toBeInstanceOf(OptimisticLockError);
+      } else {
+        console.error("UNEXPECTED ERROR:", r.reason);
+        expect(r.reason.code).toBe("P2025");
+      }
+    });
+
+    const currentWallet = await db.wallet.findUniqueOrThrow({ where: { id: testWalletId } });
+    expect(currentWallet.version).toBe(initialVersion + 1);
   });
 });
 

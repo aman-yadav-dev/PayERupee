@@ -3,6 +3,7 @@ import { Prisma, PayoutStatus, LedgerEntryPurpose, ReferenceType, PaymentMode, A
 import { adjustWalletBalance } from "./wallet.service";
 import { createLedgerEntry } from "./ledger.service";
 import { logAction } from "./audit.service";
+import { z } from "zod";
 
 const Decimal = Prisma.Decimal;
 type Decimal = Prisma.Decimal;
@@ -14,37 +15,50 @@ export class IllegalStateTransitionError extends Error {
   }
 }
 
-export type CreatePayoutInput = {
-  idempotencyKey: string;
-  amount: string | number | Decimal;
-  paymentMode?: PaymentMode;
-  accountNumber: string;
-  ifscCode: string;
-  accountHolderName: string;
-  beneficiaryPhone?: string;
-};
+export class SystemConfigurationError extends Error {
+  constructor(message = "System settings missing. Halting all financial operations.") {
+    super(message);
+    this.name = "SystemConfigurationError";
+  }
+}
+
+export const PayoutRequestSchema = z.object({
+  idempotencyKey: z.string().min(1),
+  amount: z.string().refine(val => !isNaN(Number(val)) && Number(val) > 0, "Must be a positive decimal"),
+  paymentMode: z.nativeEnum(PaymentMode).optional(),
+  accountNumber: z.string().min(5).max(30),
+  ifscCode: z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, "Invalid IFSC code"),
+  accountHolderName: z.string().min(2),
+  beneficiaryPhone: z.string().regex(/^\+[1-9]\d{1,14}$/, "Must be E.164 format").optional(),
+});
+
+export type CreatePayoutInput = z.infer<typeof PayoutRequestSchema>;
 
 async function getSystemSettings() {
   const settings = await db.systemSetting.findUnique({
     where: { id: "GLOBAL_SETTINGS" }
   });
-  if (settings) return settings;
-  // Fallback if not seeded
-  return {
-    upiPayoutFee: new Decimal(0),
-    impsPayoutFee: new Decimal(5),
-    neftPayoutFee: new Decimal(3),
-    rtgsPayoutFee: new Decimal(10),
-    taxPercentage: new Decimal(18),
-  };
+  if (!settings) {
+    throw new SystemConfigurationError();
+  }
+  return settings;
 }
 
-export async function createPayout(merchantProfileId: string, input: CreatePayoutInput) {
+export async function createPayout(merchantProfileId: string, inputData: unknown) {
+  // 1. Zod Validation
+  const input = PayoutRequestSchema.parse(inputData);
   const amountDecimal = new Decimal(input.amount);
   const paymentMode = input.paymentMode || PaymentMode.IMPS;
   
-  // Calculate fees server-side
+  // 2. Fail-Closed Settings
   const settings = await getSystemSettings();
+
+  // 3. Min/Max Validation
+  if (amountDecimal.lt(settings.minPayoutAmount) || amountDecimal.gt(settings.maxPayoutAmount)) {
+    throw new Error(`Amount must be between ${settings.minPayoutAmount} and ${settings.maxPayoutAmount}`);
+  }
+
+  // Calculate fees server-side
   let fee = new Decimal(0);
   switch (paymentMode) {
     case PaymentMode.UPI: fee = settings.upiPayoutFee; break;
