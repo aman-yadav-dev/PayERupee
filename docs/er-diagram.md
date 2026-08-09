@@ -1,22 +1,27 @@
-# Entity Relationship Diagram
+# Target Entity Relationship Diagram
 
 ```mermaid
 erDiagram
-    %% Authentication
+    %% Identity 
     User ||--o{ Session : has
     User ||--o{ Account : has
     
     %% Domain
     User ||--o| MerchantProfile : owns
     MerchantProfile ||--o| KycApplication : submits
-    MerchantProfile ||--o| Wallet : holds
     
-    %% Ledger
-    Wallet ||--|{ LedgerEntry : participates_in
-    SystemAccount ||--|{ LedgerEntry : participates_in
+    %% Financial Ledger 
+    MerchantProfile ||--o| Wallet : accesses_cache
+    MerchantProfile ||--o| LedgerAccount : owns_liability_account
     
-    %% Transactions
+    %% Immutable Entries
+    LedgerAccount ||--o{ LedgerEntry : debits_or_credits
+    
+    %% Operations
     MerchantProfile ||--o{ Payout : initiates
     Payout ||--o| IdempotencyKey : guarded_by
     Payout }|--|| LedgerEntry : generates
+    
+    %% Audit
+    User ||--o{ AuditLog : performs
 ```\n

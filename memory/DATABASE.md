@@ -1,2 +1,2 @@
-# Database
-See docs/database.md.\n
+# Database Target State
+See `docs/database-target.md` for the definitive schema breakdown (User vs MerchantProfile, LedgerAccount vs LedgerEntry).\n
