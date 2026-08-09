@@ -1,17 +1,17 @@
-# Target Entity Relationship Diagram
+# Entity Relationship Diagram
 
 ```mermaid
 erDiagram
-    %% Authentication (Better Auth)
+    %% Authentication
     User ||--o{ Session : has
     User ||--o{ Account : has
     
-    %% Domain (PayERupee)
+    %% Domain
     User ||--o| MerchantProfile : owns
     MerchantProfile ||--o| KycApplication : submits
     MerchantProfile ||--o| Wallet : holds
     
-    %% Ledger (Double-Entry)
+    %% Ledger
     Wallet ||--|{ LedgerEntry : participates_in
     SystemAccount ||--|{ LedgerEntry : participates_in
     

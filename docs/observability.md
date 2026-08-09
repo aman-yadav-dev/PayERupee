@@ -1,3 +1,3 @@
 # Observability
-
-AuditLog table tracks all admin mutations.\n
+- Audit logs for all Admin mutations.
+- Structured JSON logging (Pino).\n

@@ -1,3 +1,3 @@
 # Deployment
-
-Next.js deployed to Vercel/Node.js. Postgres hosted on Neon.\n
+- Vercel for Edge Network.
+- Neon for Serverless PostgreSQL.\n
