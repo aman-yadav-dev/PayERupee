@@ -10,6 +10,8 @@ import { registerSchema, type RegisterInput } from "@/schemas/auth";
 import { successResponse, errorResponse } from "@/lib/responses";
 import { type ApiResponse } from "@/types/api";
 
+import { onboardMerchant } from "@/lib/services/merchant.service";
+
 // import { logger } from "@/lib/logger"; // TODO: Phase 3
 
 export async function registerMerchantAction(
@@ -63,30 +65,13 @@ export async function registerMerchantAction(
 
     const userId = createdUserId!;
 
-    // 4. Initialize Merchant Data
-    await db.$transaction([
-      db.user.update({
-        where: {
-          id: userId,
-        },
-        data: {
-          businessName,
-          address,
-          phone,
-          role: "MERCHANT",
-          status: "PENDING",
-        },
-      }),
-
-      db.wallet.create({
-        data: {
-          merchantId: userId,
-        },
-      }),
-
-      // Phase 3
-      // db.auditLog.create({...})
-    ]);
+    // 4. Initialize Merchant Data atomically
+    await onboardMerchant({
+      userId,
+      businessName,
+      phone,
+      address,
+    });
 
     return successResponse(
       null,
@@ -96,12 +81,11 @@ export async function registerMerchantAction(
     // 5. Compensation Strategy
     if (createdUserId) {
       try {
-        await db.user.update({
+        // If domain onboarding failed, we must cleanly remove the orphaned Auth user
+        // so they can retry registration.
+        await db.user.delete({
           where: {
             id: createdUserId,
-          },
-          data: {
-            status: "SUSPENDED",
           },
         });
 

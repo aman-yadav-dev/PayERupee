@@ -2,11 +2,12 @@
 
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
 import { onboardingSchema } from "@/schemas/auth";
 import { errorResponse, successResponse } from "@/lib/responses";
-import { UserRole, UserStatus, Currency } from "@prisma/client";
 import type { ApiResponse } from "@/types/api";
+
+import { onboardMerchant, MerchantExistsError } from "@/lib/services/merchant.service";
+import { Prisma } from "@prisma/client";
 
 export async function completeMerchantOnboardingAction(
   rawInput: unknown
@@ -34,56 +35,34 @@ export async function completeMerchantOnboardingAction(
 
     const { businessName, phone, address } = parseResult.data;
 
-    // 3. Check for existing phone collision
-    const existingPhone = await db.user.findFirst({
-      where: {
-        phone,
-        id: { not: userId },
-      },
+    // 3. Execute atomic merchant onboarding
+    await onboardMerchant({
+      userId,
+      businessName,
+      phone,
+      address,
     });
 
-    if (existingPhone) {
+    return successResponse(
+      { userId },
+      "Merchant profile created successfully. Your account is now under review."
+    );
+  } catch (error: any) {
+    console.error("❌ Merchant Onboarding Action Error:", error);
+    
+    if (error instanceof MerchantExistsError) {
+      return errorResponse("Merchant profile already exists for this account.");
+    }
+
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
       return errorResponse("Phone number is already registered to another account", {
         phone: ["This phone number is already registered"],
       });
     }
 
-    // 4. Update user profile & initialize merchant wallet in transaction
-    await db.$transaction(async (tx) => {
-      // Update User profile
-      await tx.user.update({
-        where: { id: userId },
-        data: {
-          businessName,
-          phone,
-          address,
-          role: UserRole.MERCHANT,
-          status: UserStatus.PENDING,
-        },
-      });
-
-      // Check or create wallet
-      const existingWallet = await tx.wallet.findUnique({
-        where: { merchantId: userId },
-      });
-
-      if (!existingWallet) {
-        await tx.wallet.create({
-          data: {
-            merchantId: userId,
-            balance: 0.0,
-            currency: Currency.INR,
-          },
-        });
-      }
-    });
-
-    return successResponse(
-      { userId },
-      "Merchant profile updated successfully. Your account is now under review."
-    );
-  } catch (error: any) {
-    console.error("❌ Merchant Onboarding Action Error:", error);
     return errorResponse("Failed to save merchant profile. Please try again.");
   }
 }
