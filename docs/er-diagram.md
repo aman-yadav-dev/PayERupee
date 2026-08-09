@@ -15,12 +15,11 @@ erDiagram
     MerchantProfile ||--o| LedgerAccount : owns_liability_account
     
     %% Immutable Entries
-    LedgerAccount ||--o{ LedgerEntry : debits_or_credits
+    LedgerAccount ||--o{ LedgerEntry : participates_in
     
     %% Operations
     MerchantProfile ||--o{ Payout : initiates
-    Payout ||--o| IdempotencyKey : guarded_by
-    Payout }|--|| LedgerEntry : generates
+    Payout ||--|{ LedgerEntry : generates
     
     %% Audit
     User ||--o{ AuditLog : performs
