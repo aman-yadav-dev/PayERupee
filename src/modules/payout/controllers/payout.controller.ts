@@ -2,13 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateApiKey, UnauthorizedError } from "@/modules/auth/application/api-auth.service";
 import { createPayout } from "@/modules/payout/domain/payout.service";
 import { dispatchPayout } from "@/modules/payout/application/payout.orchestrator";
-import { InMemoryPayoutProvider } from "@/modules/provider/adapters/mock.provider";
+import { getPayoutProvider } from "@/modules/provider/adapters/provider.factory";
 import { z } from "zod";
 import { logger } from "@/infrastructure/logger/logger";
 import { checkRateLimit } from "@/shared/utils/rate-limit";
 
-// In the future this should be injected.
-const provider = new InMemoryPayoutProvider();
+const provider = getPayoutProvider();
 
 export class PayoutController {
   static async create(req: NextRequest): Promise<NextResponse> {

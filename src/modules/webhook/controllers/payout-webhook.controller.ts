@@ -1,38 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
 import { handlePayoutSuccess, failPayout, reversePayout, IllegalStateTransitionError } from "@/modules/payout/domain/payout.service";
 import { db } from "@/infrastructure/database/db";
-import { InMemoryPayoutProvider } from "@/modules/provider/adapters/mock.provider";
+import { getPayoutProvider } from "@/modules/provider/adapters/provider.factory";
 import { env } from "@/config/env";
 
-const provider = new InMemoryPayoutProvider(); // In the future, this will be resolved via a ProviderRegistry
+const provider = getPayoutProvider();
 
 export class PayoutWebhookController {
   static async handleWebhook(req: NextRequest): Promise<NextResponse> {
     try {
-      const signature = req.headers.get("X-Provider-Signature");
-      const secret = env.PROVIDER_WEBHOOK_SECRET || process.env.PROVIDER_WEBHOOK_SECRET || "test-secret";
-      
+      const headersObj: Record<string, string> = {};
+      req.headers.forEach((value, key) => {
+        headersObj[key.toLowerCase()] = value;
+      });
+
       // 1. Fetch raw body EXACTLY once to preserve bytes for crypto
       const rawBody = await req.text();
 
       // 2. Signature verification BEFORE parsing
-      const isValid = provider.verifyWebhookSignature(rawBody, signature, secret);
+      const isValid = provider.verifyWebhookSignature(rawBody, headersObj);
 
       if (!isValid) {
         return NextResponse.json({ success: false, error: "Invalid signature" }, { status: 401 });
       }
 
-      // 3. Safe to parse now
-      let body;
+      // 3. Normalize webhook payload via provider
+      let normalizedEvent;
       try {
-        body = JSON.parse(rawBody);
+        normalizedEvent = provider.parseWebhook(rawBody);
       } catch (e) {
-        return NextResponse.json({ success: false, error: "Malformed JSON payload" }, { status: 400 });
+        return NextResponse.json({ success: false, error: "Malformed payload or parsing error" }, { status: 400 });
       }
-      const { providerReference, status, reason } = body;
+      const { providerReference, status, reason } = normalizedEvent;
 
       if (!providerReference || !status) {
-        return NextResponse.json({ success: false, error: "Missing required fields" }, { status: 400 });
+        return NextResponse.json({ success: false, error: "Missing required fields in normalized event" }, { status: 400 });
       }
 
       // 1. Map provider reference to internal payout

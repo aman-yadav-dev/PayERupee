@@ -1,4 +1,4 @@
-import { IPayoutProvider, ProviderDispatchResult } from "@/modules/provider/core/provider.interface";
+import { IPayoutProvider, ProviderDispatchResult, NormalizedWebhookEvent } from "@/modules/provider/core/provider.interface";
 
 type MockAction = "SUCCESS" | "FAILED" | "TIMEOUT" | "NETWORK_ERROR";
 
@@ -17,7 +17,9 @@ export class InMemoryPayoutProvider implements IPayoutProvider {
     amount: string,
     accountNumber: string,
     ifscCode: string,
-    mode: string
+    mode: string,
+    accountHolderName: string,
+    beneficiaryPhone?: string | null
   ): Promise<ProviderDispatchResult> {
     if (InMemoryPayoutProvider.latencyMs > 0) {
       await new Promise(r => setTimeout(r, InMemoryPayoutProvider.latencyMs));
@@ -56,8 +58,17 @@ export class InMemoryPayoutProvider implements IPayoutProvider {
     };
   }
 
-  verifyWebhookSignature(rawBody: string, signature: string | null, secret: string): boolean {
-    // For mock testing, we just check if signature matches secret
-    return signature === secret;
+  verifyWebhookSignature(rawBody: string, headers: Record<string, string>): boolean {
+    const secret = process.env.PROVIDER_WEBHOOK_SECRET || "test-secret";
+    return headers["x-provider-signature"] === secret;
+  }
+
+  parseWebhook(rawBody: string): NormalizedWebhookEvent {
+    const body = JSON.parse(rawBody);
+    return {
+      providerReference: body.providerReference,
+      status: body.status,
+      reason: body.reason,
+    };
   }
 }

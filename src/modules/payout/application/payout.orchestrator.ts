@@ -18,7 +18,9 @@ export async function dispatchPayout(payoutId: string, merchantProfileId: string
       processedPayout.amount.toString(),
       processedPayout.accountNumber,
       processedPayout.ifscCode,
-      processedPayout.paymentMode
+      processedPayout.paymentMode,
+      processedPayout.accountHolderName,
+      processedPayout.beneficiaryPhone
     );
 
     // 3. Post-Dispatch Handling

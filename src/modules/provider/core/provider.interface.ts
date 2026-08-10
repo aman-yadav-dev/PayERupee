@@ -6,6 +6,12 @@ export interface ProviderDispatchResult {
   failureReason?: string;
 }
 
+export interface NormalizedWebhookEvent {
+  providerReference: string;
+  status: "SUCCESS" | "FAILED" | "REVERSED";
+  reason?: string;
+}
+
 export interface IPayoutProvider {
   /**
    * Dispatches a payout to the external provider.
@@ -20,7 +26,9 @@ export interface IPayoutProvider {
     amount: string,
     accountNumber: string,
     ifscCode: string,
-    mode: string
+    mode: string,
+    accountHolderName: string,
+    beneficiaryPhone?: string | null
   ): Promise<ProviderDispatchResult>;
 
   /**
@@ -35,5 +43,10 @@ export interface IPayoutProvider {
    * @param secret The webhook secret for this provider
    * @returns boolean true if valid, false if invalid
    */
-  verifyWebhookSignature(rawBody: string, signature: string | null, secret: string): boolean;
+  verifyWebhookSignature(rawBody: string, headers: Record<string, string>): boolean;
+
+  /**
+   * Normalizes the provider-specific webhook payload into a standard event.
+   */
+  parseWebhook(rawBody: string): NormalizedWebhookEvent;
 }

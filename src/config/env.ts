@@ -19,6 +19,12 @@ const envSchema = z.object({
   PROVIDER_API_KEY: z.string().optional(),
   PROVIDER_API_SECRET: z.string().optional(),
   PROVIDER_WEBHOOK_SECRET: z.string().optional(),
+
+  // Phase 6 Cashfree Configuration
+  CASHFREE_CLIENT_ID: z.string().optional(),
+  CASHFREE_CLIENT_SECRET: z.string().optional(),
+  CASHFREE_WEBHOOK_SECRET: z.string().optional(),
+  CASHFREE_ENVIRONMENT: z.enum(["TEST", "PRODUCTION"]).default("TEST"),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
