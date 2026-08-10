@@ -43,7 +43,7 @@ describe("CashfreePayoutProvider", () => {
         "9999999999"
       );
 
-      expect(result.outcome).toBe("ACCEPTED");
+      expect(result.outcome).toBe("QUEUED");
       expect(result.providerReference).toBe("123456789");
       expect(global.fetch).toHaveBeenCalledTimes(2);
     });
@@ -72,7 +72,7 @@ describe("CashfreePayoutProvider", () => {
         "John Doe"
       );
 
-      expect(result.outcome).toBe("ACCEPTED");
+      expect(result.outcome).toBe("QUEUED");
       expect(result.providerReference).toBe("98765");
       expect(global.fetch).toHaveBeenCalledTimes(2);
     });
@@ -121,13 +121,15 @@ describe("CashfreePayoutProvider", () => {
 
       const normalized = provider.parseWebhook(rawBody);
       expect(normalized.status).toBe("SUCCESS");
+      expect(normalized.payoutId).toBe("pout_123");
       expect(normalized.providerReference).toBe("cashfree_ref_123");
     });
 
     it("should generate and verify valid webhook signature", () => {
       const secret = "my_secret_key";
       env.CASHFREE_WEBHOOK_SECRET = secret;
-      const timestamp = "1629800000";
+      // Use current timestamp so it passes freshness check
+      const timestamp = Math.floor(Date.now() / 1000).toString();
       const rawBody = JSON.stringify({ type: "TRANSFER_SUCCESS" });
       const signatureData = timestamp + rawBody;
       const computedSignature = crypto
@@ -144,14 +146,50 @@ describe("CashfreePayoutProvider", () => {
       expect(isValid).toBe(true);
     });
 
+    it("should reject expired webhook timestamp", () => {
+      const secret = "my_secret_key";
+      env.CASHFREE_WEBHOOK_SECRET = secret;
+      // Timestamp from 10 minutes ago
+      const timestamp = Math.floor(Date.now() / 1000 - 600).toString();
+      const rawBody = JSON.stringify({ type: "TRANSFER_SUCCESS" });
+      const signatureData = timestamp + rawBody;
+      const computedSignature = crypto
+        .createHmac("sha256", secret)
+        .update(signatureData)
+        .digest("base64");
+
+      const headers = {
+        "x-webhook-signature": computedSignature,
+        "x-webhook-timestamp": timestamp
+      };
+
+      const isValid = provider.verifyWebhookSignature(rawBody, headers);
+      expect(isValid).toBe(false);
+    });
+
+    it("should reject malformed signatures gracefully", () => {
+      const secret = "my_secret_key";
+      env.CASHFREE_WEBHOOK_SECRET = secret;
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const rawBody = JSON.stringify({ type: "TRANSFER_SUCCESS" });
+
+      const headers = {
+        "x-webhook-signature": "short", // Will cause timingSafeEqual length mismatch
+        "x-webhook-timestamp": timestamp
+      };
+
+      const isValid = provider.verifyWebhookSignature(rawBody, headers);
+      expect(isValid).toBe(false);
+    });
+
     it("should reject invalid webhook signature", () => {
       const secret = "my_secret_key";
       env.CASHFREE_WEBHOOK_SECRET = secret;
-      const timestamp = "1629800000";
+      const timestamp = Math.floor(Date.now() / 1000).toString();
       const rawBody = JSON.stringify({ type: "TRANSFER_SUCCESS" });
       
       const headers = {
-        "x-webhook-signature": "invalid_signature_here",
+        "x-webhook-signature": Buffer.from("invalid_signature_here").toString('base64'),
         "x-webhook-timestamp": timestamp
       };
 

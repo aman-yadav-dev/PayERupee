@@ -31,20 +31,30 @@ export class PayoutWebhookController {
       } catch (e) {
         return NextResponse.json({ success: false, error: "Malformed payload or parsing error" }, { status: 400 });
       }
-      const { providerReference, status, reason } = normalizedEvent;
-
-      if (!providerReference || !status) {
-        return NextResponse.json({ success: false, error: "Missing required fields in normalized event" }, { status: 400 });
-      }
 
       // 1. Map provider reference to internal payout
-      const payout = await db.payout.findFirst({
-        where: { providerReference }
+      const payout = await db.payout.findUnique({
+        where: { id: normalizedEvent.payoutId }
       });
 
       if (!payout) {
         // Ignored - could be for another environment or system
         return NextResponse.json({ success: true, message: "Payout not found, ignored" }, { status: 200 });
+      }
+
+      if (normalizedEvent.providerReference && !payout.providerReference) {
+        // Opportunistically save the provider reference if we didn't have it yet
+        // (e.g. if the webhook beat the synchronous API response)
+        await db.payout.update({
+          where: { id: payout.id },
+          data: { providerReference: normalizedEvent.providerReference }
+        });
+      }
+
+      const { status, reason, providerReference } = normalizedEvent;
+
+      if (!status) {
+        return NextResponse.json({ success: false, error: "Missing required status in normalized event" }, { status: 400 });
       }
 
       // 2. Transition State safely and idempotently

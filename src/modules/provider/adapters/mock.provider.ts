@@ -1,14 +1,14 @@
 import { IPayoutProvider, ProviderDispatchResult, NormalizedWebhookEvent } from "@/modules/provider/core/provider.interface";
 
-type MockAction = "SUCCESS" | "FAILED" | "TIMEOUT" | "NETWORK_ERROR";
+type MockAction = "QUEUED" | "FAILED" | "TIMEOUT" | "NETWORK_ERROR";
 
 export class InMemoryPayoutProvider implements IPayoutProvider {
   // Configurable state to simulate different conditions in tests
-  public static nextAction: MockAction = "SUCCESS";
+  public static nextAction: MockAction = "QUEUED";
   public static latencyMs = 0;
 
   public static reset() {
-    this.nextAction = "SUCCESS";
+    this.nextAction = "QUEUED";
     this.latencyMs = 0;
   }
 
@@ -26,9 +26,9 @@ export class InMemoryPayoutProvider implements IPayoutProvider {
     }
 
     switch (InMemoryPayoutProvider.nextAction) {
-      case "SUCCESS":
+      case "QUEUED":
         return {
-          outcome: "ACCEPTED",
+          outcome: "QUEUED",
           providerReference: `MOCK_REF_${payoutId}`,
         };
       case "FAILED":
@@ -53,7 +53,7 @@ export class InMemoryPayoutProvider implements IPayoutProvider {
 
   async status(payoutId: string, providerReference?: string): Promise<ProviderDispatchResult> {
     return {
-      outcome: "ACCEPTED",
+      outcome: "QUEUED",
       providerReference: providerReference || `MOCK_REF_${payoutId}`,
     };
   }
@@ -66,6 +66,7 @@ export class InMemoryPayoutProvider implements IPayoutProvider {
   parseWebhook(rawBody: string): NormalizedWebhookEvent {
     const body = JSON.parse(rawBody);
     return {
+      payoutId: body.payoutId || body.providerReference, // fallback for simple tests
       providerReference: body.providerReference,
       status: body.status,
       reason: body.reason,

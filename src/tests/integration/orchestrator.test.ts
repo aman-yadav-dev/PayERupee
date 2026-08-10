@@ -82,15 +82,15 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
     expect(extractedId).toBe(merchantId);
   });
 
-  it("3. PENDING -> PROCESSING deducts exactly once and completes successfully", async () => {
-    InMemoryPayoutProvider.nextAction = "SUCCESS";
+  it("3. PENDING -> PROCESSING deducts exactly once and is left in PROCESSING on QUEUED", async () => {
+    InMemoryPayoutProvider.nextAction = "QUEUED";
     const initialWallet = await db.wallet.findUniqueOrThrow({ where: { id: walletId } });
 
     const { payout } = await createPayout(merchantId, validPayoutData());
     expect(payout.status).toBe(PayoutStatus.PENDING);
 
     const finalPayout = await dispatchPayout(payout.id, merchantId, provider);
-    expect(finalPayout.status).toBe(PayoutStatus.SUCCESS);
+    expect(finalPayout.status).toBe(PayoutStatus.PROCESSING);
     expect(finalPayout.providerReference).toBe(`MOCK_REF_${payout.id}`);
 
     const newWallet = await db.wallet.findUniqueOrThrow({ where: { id: walletId } });
@@ -139,17 +139,17 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
     expect(newWallet.balance.toNumber()).toBeLessThan(initialWallet.balance.toNumber());
   });
 
-  const sendWebhook = async (ref: string, status: string, signature: string = process.env.PROVIDER_WEBHOOK_SECRET || "test-secret") => {
+  const sendWebhook = async (payoutId: string, ref: string, status: string, signature: string = process.env.PROVIDER_WEBHOOK_SECRET || "test-secret") => {
     const req = new NextRequest("http://localhost/api/webhooks/payouts", {
       method: "POST",
       headers: { "X-Provider-Signature": signature },
-      body: JSON.stringify({ providerReference: ref, status, reason: "Testing Webhook" }),
+      body: JSON.stringify({ payoutId, providerReference: ref, status, reason: "Testing Webhook" }),
     });
     return await webhookPost(req);
   };
 
   it("7. Webhook invalid signature is rejected safely", async () => {
-    const res = await sendWebhook("ANY_REF", "SUCCESS", "bad-signature");
+    const res = await sendWebhook("ANY_ID", "ANY_REF", "SUCCESS", "bad-signature");
     expect(res.status).toBe(401);
   });
 
@@ -160,7 +160,7 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
     const initialWallet = await db.wallet.findUniqueOrThrow({ where: { id: walletId } });
 
     // Send valid SUCCESS webhook
-    const res1 = await sendWebhook(processing.providerReference!, "SUCCESS");
+    const res1 = await sendWebhook(payout.id, processing.providerReference!, "SUCCESS");
     if (res1.status !== 200) console.error(await res1.json());
     expect(res1.status).toBe(200);
 
@@ -168,7 +168,7 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
     expect(updated.status).toBe(PayoutStatus.SUCCESS);
 
     // Send duplicate SUCCESS webhook (Idempotent)
-    const res2 = await sendWebhook(processing.providerReference!, "SUCCESS");
+    const res2 = await sendWebhook(payout.id, processing.providerReference!, "SUCCESS");
     expect(res2.status).toBe(200);
 
     const finalWallet = await db.wallet.findUniqueOrThrow({ where: { id: walletId } });
@@ -182,7 +182,7 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
     const processing = await dispatchPayout(payout.id, merchantId, provider);
 
     // Send FAILED webhook
-    const res1 = await sendWebhook(processing.providerReference!, "FAILED");
+    const res1 = await sendWebhook(payout.id, processing.providerReference!, "FAILED");
     expect(res1.status).toBe(200);
 
     const updated = await db.payout.findUniqueOrThrow({ where: { id: payout.id } });
@@ -192,20 +192,23 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
     expect(refundedWallet.balance.toString()).toBe(initialWallet.balance.toString());
 
     // Send duplicate FAILED webhook (Idempotent)
-    const res2 = await sendWebhook(processing.providerReference!, "FAILED");
+    const res2 = await sendWebhook(payout.id, processing.providerReference!, "FAILED");
     expect(res2.status).toBe(200);
   });
 
   it("10. Webhook REVERSED correctly refunds from SUCCESS and rejects duplicates", async () => {
-    InMemoryPayoutProvider.nextAction = "SUCCESS";
+    InMemoryPayoutProvider.nextAction = "QUEUED";
     const initialWallet = await db.wallet.findUniqueOrThrow({ where: { id: walletId } });
     const { payout } = await createPayout(merchantId, validPayoutData());
-    const successPayout = await dispatchPayout(payout.id, merchantId, provider);
+    const queuedPayout = await dispatchPayout(payout.id, merchantId, provider);
 
+    await sendWebhook(payout.id, queuedPayout.providerReference!, "SUCCESS");
+
+    const successPayout = await db.payout.findUniqueOrThrow({ where: { id: payout.id } });
     expect(successPayout.status).toBe(PayoutStatus.SUCCESS);
 
     // Send REVERSED webhook (simulates bounce a day later)
-    const res1 = await sendWebhook(successPayout.providerReference!, "REVERSED");
+    const res1 = await sendWebhook(payout.id, successPayout.providerReference!, "REVERSED");
     expect(res1.status).toBe(200);
 
     const updated = await db.payout.findUniqueOrThrow({ where: { id: payout.id } });
@@ -215,17 +218,19 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
     expect(refundedWallet.balance.toString()).toBe(initialWallet.balance.toString());
 
     // Send duplicate REVERSED webhook (Idempotent)
-    const res2 = await sendWebhook(successPayout.providerReference!, "REVERSED");
+    const res2 = await sendWebhook(payout.id, successPayout.providerReference!, "REVERSED");
     expect(res2.status).toBe(200);
   });
 
   it("11. Out-of-order webhook (FAILED after SUCCESS) safely ignores backward transitions", async () => {
-    InMemoryPayoutProvider.nextAction = "SUCCESS";
+    InMemoryPayoutProvider.nextAction = "QUEUED";
     const { payout } = await createPayout(merchantId, validPayoutData());
-    const successPayout = await dispatchPayout(payout.id, merchantId, provider);
+    const queuedPayout = await dispatchPayout(payout.id, merchantId, provider);
     
+    await sendWebhook(payout.id, queuedPayout.providerReference!, "SUCCESS");
+
     // Simulate delayed/erroneous FAILED webhook hitting terminal SUCCESS state
-    const res = await sendWebhook(successPayout.providerReference!, "FAILED");
+    const res = await sendWebhook(payout.id, queuedPayout.providerReference!, "FAILED");
     expect(res.status).toBe(200); // Handled safely via IllegalStateTransitionError internally
     const data = await res.json();
     expect(data.message).toBe("Ignored invalid state transition");

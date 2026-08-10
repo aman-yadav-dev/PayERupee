@@ -1,4 +1,4 @@
-export type ProviderOutcome = "ACCEPTED" | "REJECTED" | "TIMEOUT" | "NETWORK_ERROR";
+export type ProviderOutcome = "QUEUED" | "REJECTED" | "TIMEOUT" | "NETWORK_ERROR";
 
 export interface ProviderDispatchResult {
   outcome: ProviderOutcome;
@@ -7,7 +7,8 @@ export interface ProviderDispatchResult {
 }
 
 export interface NormalizedWebhookEvent {
-  providerReference: string;
+  payoutId: string;
+  providerReference?: string;
   status: "SUCCESS" | "FAILED" | "REVERSED";
   reason?: string;
 }

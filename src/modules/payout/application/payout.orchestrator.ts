@@ -29,12 +29,23 @@ export async function dispatchPayout(payoutId: string, merchantProfileId: string
       return await failPayout(processedPayout.id, merchantProfileId, result.failureReason || "Provider rejected payout");
     }
 
-    if (result.outcome === "ACCEPTED") {
-      // Instant success (uncommon, usually happens via webhook, but some providers support it).
-      return await handlePayoutSuccess(processedPayout.id, merchantProfileId, result.providerReference);
+    if (result.outcome === "QUEUED") {
+      // The transfer has been accepted for processing by the provider.
+      // We MUST NOT assume it is successful yet. It remains in PROCESSING.
+      // We only update the providerReference so we can track it.
+      if (result.providerReference) {
+        return await db.payout.update({
+          where: { id: processedPayout.id },
+          data: { providerReference: result.providerReference }
+        });
+      }
+      return processedPayout;
     }
 
-    // "TIMEOUT" or "NETWORK_ERROR" -> leave as PROCESSING.
+
+
+    // For TIMEOUT or NETWORK_ERROR, we also leave it in PROCESSING.
+    // A background worker or status sync job will eventually reconcile it.
     if (result.providerReference) {
       return await db.payout.update({
         where: { id: processedPayout.id },

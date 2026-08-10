@@ -115,7 +115,7 @@ export class CashfreePayoutProvider implements IPayoutProvider {
 
       // Transfer accepted for processing
       return {
-        outcome: "ACCEPTED",
+        outcome: "QUEUED",
         providerReference: data.reference_id?.toString() || payoutId,
       };
     } catch (e) {
@@ -142,7 +142,7 @@ export class CashfreePayoutProvider implements IPayoutProvider {
       const status = data.status; // e.g. "SUCCESS", "FAILED", "PENDING", "REVERSED"
 
       if (status === "SUCCESS") {
-        return { outcome: "ACCEPTED", providerReference: data.reference_id?.toString() };
+        return { outcome: "QUEUED", providerReference: data.reference_id?.toString() };
       } else if (status === "FAILED" || status === "REVERSED") {
         return { outcome: "REJECTED", failureReason: data.reason || "Transfer failed", providerReference: data.reference_id?.toString() };
       } else {
@@ -154,19 +154,38 @@ export class CashfreePayoutProvider implements IPayoutProvider {
   }
 
   verifyWebhookSignature(rawBody: string, headers: Record<string, string>): boolean {
-    const secret = env.CASHFREE_WEBHOOK_SECRET || "default_test_secret";
-    const signature = headers["x-webhook-signature"];
-    const timestamp = headers["x-webhook-timestamp"];
+    try {
+      const secret = env.CASHFREE_WEBHOOK_SECRET || "default_test_secret";
+      const signature = headers["x-webhook-signature"];
+      const timestamp = headers["x-webhook-timestamp"];
 
-    if (!signature || !timestamp) return false;
+      if (!signature || !timestamp) return false;
 
-    const signatureData = timestamp + rawBody;
-    const computedSignature = crypto
-      .createHmac("sha256", secret)
-      .update(signatureData)
-      .digest("base64");
+      // Check timestamp freshness (max 5 minutes = 300,000 ms)
+      const webhookTime = parseInt(timestamp, 10);
+      if (isNaN(webhookTime)) return false;
+      const now = Math.floor(Date.now() / 1000);
+      if (Math.abs(now - webhookTime) > 300) {
+        return false;
+      }
 
-    return signature === computedSignature;
+      const signatureData = timestamp + rawBody;
+      const computedSignature = crypto
+        .createHmac("sha256", secret)
+        .update(signatureData)
+        .digest("base64");
+
+      const signatureBuffer = Buffer.from(signature);
+      const computedBuffer = Buffer.from(computedSignature);
+
+      if (signatureBuffer.length !== computedBuffer.length) {
+        return false;
+      }
+
+      return crypto.timingSafeEqual(signatureBuffer, computedBuffer);
+    } catch (e) {
+      return false;
+    }
   }
 
   parseWebhook(rawBody: string): NormalizedWebhookEvent {
@@ -193,9 +212,13 @@ export class CashfreePayoutProvider implements IPayoutProvider {
       throw new Error(`Unhandled event type: ${event}`);
     }
 
+    if (!transfer.transfer_id) {
+      throw new Error("Invalid webhook payload: missing transfer_id");
+    }
+
     return {
-      // We map the Cashfree reference_id to our providerReference
-      providerReference: transfer.reference_id?.toString() || transfer.transfer_id,
+      payoutId: transfer.transfer_id.toString(),
+      providerReference: transfer.reference_id?.toString(),
       status,
       reason: transfer.reason,
     };
