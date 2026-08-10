@@ -1,9 +1,9 @@
 "use server";
 
-import { db } from "@/lib/db";
-import { forgotPasswordSchema } from "@/schemas/auth";
-import { errorResponse, successResponse } from "@/lib/responses";
-import type { ApiResponse } from "@/types/api";
+import { db } from "@/infrastructure/database/db";
+import { forgotPasswordSchema } from "@/modules/auth/schemas/auth.schema";
+import { errorResponse, successResponse } from "@/shared/utils/responses";
+import type { ApiResponse } from "@/shared/types/api";
 
 export async function forgotPasswordAction(
   rawInput: unknown

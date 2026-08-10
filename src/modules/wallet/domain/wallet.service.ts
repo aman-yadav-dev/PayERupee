@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { db } from "@/lib/db";
+import { db } from "@/infrastructure/database/db";
 type Decimal = Prisma.Decimal;
 
 export class OptimisticLockError extends Error {

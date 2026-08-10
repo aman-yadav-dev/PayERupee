@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { db } from "@/lib/db";
-import { createLedgerEntry, InvalidLedgerEntryError } from "@/lib/services/ledger.service";
+import { db } from "@/infrastructure/database/db";
+import { createLedgerEntry, InvalidLedgerEntryError } from "@/modules/ledger/domain/ledger.service";
 import { LedgerAccountType, Currency, LedgerEntryPurpose, ReferenceType } from "@prisma/client";
 
 describe("Ledger Service Invariants (Integration)", () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { db } from "@/lib/db";
-import { adjustWalletBalance, OptimisticLockError } from "@/lib/services/wallet.service";
+import { db } from "@/infrastructure/database/db";
+import { adjustWalletBalance, OptimisticLockError } from "@/modules/wallet/domain/wallet.service";
 import { Prisma, Currency, LedgerAccountType } from "@prisma/client";
 const Decimal = Prisma.Decimal;
 
@@ -96,8 +96,8 @@ describe("Wallet Service Concurrency (Integration)", () => {
   });
 });
 
-import { reconcileWalletBalance, ReconciliationError } from "@/lib/services/wallet.service";
-import { createLedgerEntry } from "@/lib/services/ledger.service";
+import { reconcileWalletBalance, ReconciliationError } from "@/modules/wallet/domain/wallet.service";
+import { createLedgerEntry } from "@/modules/ledger/domain/ledger.service";
 import { LedgerEntryPurpose, ReferenceType } from "@prisma/client";
 
 describe("Wallet/Ledger Reconciliation (Integration)", () => {

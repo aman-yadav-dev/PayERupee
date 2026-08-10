@@ -1,12 +1,12 @@
 "use server";
 
 import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
-import { onboardingSchema } from "@/schemas/auth";
-import { errorResponse, successResponse } from "@/lib/responses";
-import type { ApiResponse } from "@/types/api";
+import { auth } from "@/modules/auth/infrastructure/auth";
+import { onboardingSchema } from "@/modules/auth/schemas/auth.schema";
+import { errorResponse, successResponse } from "@/shared/utils/responses";
+import type { ApiResponse } from "@/shared/types/api";
 
-import { onboardMerchant, MerchantExistsError } from "@/lib/services/merchant.service";
+import { onboardMerchant, MerchantExistsError } from "@/modules/merchant/domain/merchant.service";
 import { Prisma } from "@prisma/client";
 
 export async function completeMerchantOnboardingAction(

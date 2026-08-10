@@ -1,4 +1,4 @@
-import { IPayoutProvider, ProviderDispatchResult } from "./provider.interface";
+import { IPayoutProvider, ProviderDispatchResult } from "@/modules/provider/core/provider.interface";
 
 type MockAction = "SUCCESS" | "FAILED" | "TIMEOUT" | "NETWORK_ERROR";
 

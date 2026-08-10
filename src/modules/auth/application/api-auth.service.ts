@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db } from "@/infrastructure/database/db";
 import crypto from "crypto";
 
 export class UnauthorizedError extends Error {

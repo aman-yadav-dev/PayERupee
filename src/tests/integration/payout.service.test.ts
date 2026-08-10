@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { db } from "@/lib/db";
+import { db } from "@/infrastructure/database/db";
 import { Prisma, LedgerAccountType, PaymentMode, LedgerEntryPurpose, ReferenceType } from "@prisma/client";
-import { adjustWalletBalance, OptimisticLockError, reconcileWalletBalance, ReconciliationError } from "@/lib/services/wallet.service";
-import { onboardMerchant } from "@/lib/services/merchant.service";
-import { createPayout, processPayout, failPayout, handlePayoutSuccess, IllegalStateTransitionError, SystemConfigurationError } from "@/lib/services/payout.service";
+import { adjustWalletBalance, OptimisticLockError, reconcileWalletBalance, ReconciliationError } from "@/modules/wallet/domain/wallet.service";
+import { onboardMerchant } from "@/modules/merchant/domain/merchant.service";
+import { createPayout, processPayout, failPayout, handlePayoutSuccess, IllegalStateTransitionError, SystemConfigurationError } from "@/modules/payout/domain/payout.service";
 import crypto from "crypto";
 
 const uuidv4 = () => crypto.randomUUID();
@@ -50,7 +50,7 @@ describe("Payout Service Integration (Phase 3.1)", () => {
     liabilityAccountId = liabilityAccount.id;
 
     const transit = await db.ledgerAccount.findFirst({ where: { type: LedgerAccountType.SYSTEM_TRANSIT }});
-    const { createLedgerEntry } = await import("@/lib/services/ledger.service");
+    const { createLedgerEntry } = await import("@/modules/ledger/domain/ledger.service");
     await createLedgerEntry({
       amount: "100000.0",
       creditAccountId: liabilityAccount.id,

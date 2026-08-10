@@ -1,8 +1,8 @@
-import { db } from "@/lib/db";
+import { db } from "@/infrastructure/database/db";
 import { Prisma, PayoutStatus, LedgerEntryPurpose, ReferenceType, PaymentMode, AuditActorType, AuditEntity, AuditAction } from "@prisma/client";
-import { adjustWalletBalance } from "./wallet.service";
-import { createLedgerEntry } from "./ledger.service";
-import { logAction } from "./audit.service";
+import { adjustWalletBalance } from "@/modules/wallet/domain/wallet.service";
+import { createLedgerEntry } from "@/modules/ledger/domain/ledger.service";
+import { logAction } from "@/modules/audit/domain/audit.service";
 import { z } from "zod";
 
 const Decimal = Prisma.Decimal;

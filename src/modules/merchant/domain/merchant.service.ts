@@ -1,6 +1,6 @@
-import { db } from "@/lib/db";
+import { db } from "@/infrastructure/database/db";
 import { UserRole, AccountStatus, LedgerAccountType, Currency, AuditActorType, AuditEntity, AuditAction, Prisma } from "@prisma/client";
-import { logAction } from "./audit.service";
+import { logAction } from "@/modules/audit/domain/audit.service";
 
 export type OnboardingInput = {
   userId: string;

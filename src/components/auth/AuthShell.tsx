@@ -16,7 +16,7 @@ import {
 import { motion, type Variants } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils/utils";
 
 // ─── Animation helpers ────────────────────────────────────────────────────────
 
@@ -323,7 +323,7 @@ export function GoogleButton({ callbackURL = "/onboarding" }: { callbackURL?: st
   async function handleGoogleSignIn() {
     try {
       setLoading(true);
-      const { signIn } = await import("@/lib/auth-client");
+      const { signIn } = await import("@/modules/auth/infrastructure/auth-client");
       await signIn.social({
         provider: "google",
         callbackURL,

@@ -1,6 +1,6 @@
-import { processPayout, failPayout, handlePayoutSuccess } from "@/lib/services/payout.service";
-import { IPayoutProvider } from "@/lib/providers/provider.interface";
-import { db } from "@/lib/db";
+import { processPayout, failPayout, handlePayoutSuccess } from "@/modules/payout/domain/payout.service";
+import { IPayoutProvider } from "@/modules/provider/core/provider.interface";
+import { db } from "@/infrastructure/database/db";
 
 /**
  * Orchestrates the dispatch of a payout to the external provider.

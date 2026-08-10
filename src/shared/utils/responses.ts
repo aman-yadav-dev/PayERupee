@@ -1,4 +1,4 @@
-import { ApiResponse } from "@/types/api";
+import { ApiResponse } from "@/shared/types/api";
 
 export function successResponse<T>(
   data: T,

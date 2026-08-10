@@ -18,7 +18,7 @@ import {
 import { CustomCheckbox } from "@/components/ui/checkbox";
 import { completeMerchantOnboardingAction } from "@/actions/auth/onboarding";
 
-import { authClient } from "@/lib/auth-client";
+import { authClient } from "@/modules/auth/infrastructure/auth-client";
 
 interface OnboardingFormData {
   businessName: string;

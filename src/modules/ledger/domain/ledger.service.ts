@@ -1,6 +1,6 @@
 import { Prisma, LedgerEntryPurpose, ReferenceType } from "@prisma/client";
-import { db } from "@/lib/db";
-import { toDecimal, assertPositive } from "@/lib/utils/decimal";
+import { db } from "@/infrastructure/database/db";
+import { toDecimal, assertPositive } from "@/shared/utils/decimal";
 type Decimal = Prisma.Decimal;
 
 export type CreateLedgerEntryInput = {

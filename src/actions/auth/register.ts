@@ -3,14 +3,14 @@
 import { headers } from "next/headers";
 import { Prisma } from "@prisma/client";
 
-import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { auth } from "@/modules/auth/infrastructure/auth";
+import { db } from "@/infrastructure/database/db";
 
-import { registerSchema, type RegisterInput } from "@/schemas/auth";
-import { successResponse, errorResponse } from "@/lib/responses";
-import { type ApiResponse } from "@/types/api";
+import { registerSchema, type RegisterInput } from "@/modules/auth/schemas/auth.schema";
+import { successResponse, errorResponse } from "@/shared/utils/responses";
+import { type ApiResponse } from "@/shared/types/api";
 
-import { onboardMerchant } from "@/lib/services/merchant.service";
+import { onboardMerchant } from "@/modules/merchant/domain/merchant.service";
 
 // import { logger } from "@/lib/logger"; // TODO: Phase 3
 

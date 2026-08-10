@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeAll, afterEach } from "vitest";
-import { db } from "@/lib/db";
-import { InMemoryPayoutProvider } from "@/lib/providers/mock.provider";
-import { dispatchPayout } from "@/lib/orchestrators/payout.orchestrator";
-import { createPayout } from "@/lib/services/payout.service";
+import { db } from "@/infrastructure/database/db";
+import { InMemoryPayoutProvider } from "@/modules/provider/adapters/mock.provider";
+import { dispatchPayout } from "@/modules/payout/application/payout.orchestrator";
+import { createPayout } from "@/modules/payout/domain/payout.service";
 import { PayoutStatus } from "@prisma/client";
-import { authenticateApiKey } from "@/lib/api-auth";
+import { authenticateApiKey } from "@/modules/auth/application/api-auth.service";
 import crypto from "crypto";
 import { NextRequest } from "next/server";
 import { POST as webhookPost } from "@/app/api/webhooks/payouts/route";

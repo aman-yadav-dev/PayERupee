@@ -2,11 +2,11 @@
 
 import { headers } from "next/headers";
 
-import { auth } from "@/lib/auth";
+import { auth } from "@/modules/auth/infrastructure/auth";
 
-import { loginSchema, type LoginInput } from "@/schemas/auth";
-import { successResponse, errorResponse } from "@/lib/responses";
-import { type ApiResponse } from "@/types/api";
+import { loginSchema, type LoginInput } from "@/modules/auth/schemas/auth.schema";
+import { successResponse, errorResponse } from "@/shared/utils/responses";
+import { type ApiResponse } from "@/shared/types/api";
 
 // import { logger } from "@/lib/logger"; // TODO: Phase 3
 

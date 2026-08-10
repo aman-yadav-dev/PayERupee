@@ -1,5 +1,5 @@
 import { Prisma, AuditActorType, AuditEntity, AuditAction } from "@prisma/client";
-import { db } from "@/lib/db";
+import { db } from "@/infrastructure/database/db";
 
 export type AuditLogInput = {
   actorType: AuditActorType;
