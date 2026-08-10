@@ -9,6 +9,7 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
+    // @ts-ignore
     poolOptions: {
       threads: {
         singleThread: true,

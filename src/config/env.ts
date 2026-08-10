@@ -13,6 +13,12 @@ const envSchema = z.object({
     .default("development"),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
+
+  // Phase 5 Provider-Neutral Configuration Boundary
+  PROVIDER_NAME: z.string().optional(),
+  PROVIDER_API_KEY: z.string().optional(),
+  PROVIDER_API_SECRET: z.string().optional(),
+  PROVIDER_WEBHOOK_SECRET: z.string().optional(),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

@@ -22,17 +22,17 @@ export async function dispatchPayout(payoutId: string, merchantProfileId: string
     );
 
     // 3. Post-Dispatch Handling
-    if (result.isFailure) {
+    if (result.outcome === "REJECTED") {
       // Definitive rejection by provider. Safe to refund.
       return await failPayout(processedPayout.id, merchantProfileId, result.failureReason || "Provider rejected payout");
     }
 
-    if (result.isSuccess) {
+    if (result.outcome === "ACCEPTED") {
       // Instant success (uncommon, usually happens via webhook, but some providers support it).
       return await handlePayoutSuccess(processedPayout.id, merchantProfileId, result.providerReference);
     }
 
-    // isPending or ambiguous timeout -> leave as PROCESSING.
+    // "TIMEOUT" or "NETWORK_ERROR" -> leave as PROCESSING.
     if (result.providerReference) {
       return await db.payout.update({
         where: { id: processedPayout.id },

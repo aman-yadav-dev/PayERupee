@@ -64,6 +64,19 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
     await expect(authenticateApiKey("invalid-format")).rejects.toThrow("Missing or invalid Authorization header");
   });
 
+  it("1.1. Expired API key throws UnauthorizedError", async () => {
+    const expiredRawKey = `sk_expired_${Date.now()}`;
+    const keyHash = crypto.createHash("sha256").update(expiredRawKey).digest("hex");
+    const pastDate = new Date();
+    pastDate.setDate(pastDate.getDate() - 1); // 1 day in the past
+
+    await db.apiKey.create({
+      data: { merchantProfileId: merchantId, name: "Expired Key", keyPrefix: "sk_expired_", lastFour: "0000", keyHash, isActive: true, expiresAt: pastDate }
+    });
+
+    await expect(authenticateApiKey(`Bearer ${expiredRawKey}`)).rejects.toThrow("API Key has expired");
+  });
+
   it("2. Valid API key authenticates and returns merchantProfileId", async () => {
     const extractedId = await authenticateApiKey(`Bearer ${rawApiKey}`);
     expect(extractedId).toBe(merchantId);

@@ -1,17 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import { handlePayoutSuccess, failPayout, reversePayout, IllegalStateTransitionError } from "@/lib/services/payout.service";
 import { db } from "@/lib/db";
+import { InMemoryPayoutProvider } from "@/lib/providers/mock.provider";
+import { env } from "@/config/env";
+
+const provider = new InMemoryPayoutProvider(); // In the future, this will be resolved via a ProviderRegistry
 
 export async function POST(req: NextRequest) {
   try {
     const signature = req.headers.get("X-Provider-Signature");
-    const secret = process.env.PROVIDER_WEBHOOK_SECRET || "test-secret";
+    const secret = env.PROVIDER_WEBHOOK_SECRET || process.env.PROVIDER_WEBHOOK_SECRET || "test-secret";
     
-    if (signature !== secret) {
+    // 1. Fetch raw body EXACTLY once to preserve bytes for crypto
+    const rawBody = await req.text();
+
+    // 2. Signature verification BEFORE parsing
+    const isValid = provider.verifyWebhookSignature(rawBody, signature, secret);
+
+    if (!isValid) {
       return NextResponse.json({ success: false, error: "Invalid signature" }, { status: 401 });
     }
 
-    const body = await req.json();
+    // 3. Safe to parse now
+    let body;
+    try {
+      body = JSON.parse(rawBody);
+    } catch (e) {
+      return NextResponse.json({ success: false, error: "Malformed JSON payload" }, { status: 400 });
+    }
     const { providerReference, status, reason } = body;
 
     if (!providerReference || !status) {

@@ -1,7 +1,7 @@
+export type ProviderOutcome = "ACCEPTED" | "REJECTED" | "TIMEOUT" | "NETWORK_ERROR";
+
 export interface ProviderDispatchResult {
-  isPending: boolean;
-  isSuccess: boolean;
-  isFailure: boolean;
+  outcome: ProviderOutcome;
   providerReference?: string;
   failureReason?: string;
 }
@@ -27,4 +27,13 @@ export interface IPayoutProvider {
    * Checks the real-time status of a payout at the provider.
    */
   status(payoutId: string, providerReference?: string): Promise<ProviderDispatchResult>;
+
+  /**
+   * Verifies the cryptographic signature of an incoming webhook.
+   * @param rawBody The exact, unparsed text string of the HTTP request body
+   * @param signature The signature from the provider header
+   * @param secret The webhook secret for this provider
+   * @returns boolean true if valid, false if invalid
+   */
+  verifyWebhookSignature(rawBody: string, signature: string | null, secret: string): boolean;
 }

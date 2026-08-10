@@ -18,11 +18,15 @@ export async function authenticateApiKey(authHeader: string | null): Promise<str
 
   const apiKey = await db.apiKey.findUnique({
     where: { keyHash },
-    select: { merchantProfileId: true, isActive: true }
+    select: { merchantProfileId: true, isActive: true, expiresAt: true }
   });
 
   if (!apiKey || !apiKey.isActive) {
     throw new UnauthorizedError("Invalid or revoked API Key");
+  }
+
+  if (apiKey.expiresAt !== null && apiKey.expiresAt < new Date()) {
+    throw new UnauthorizedError("API Key has expired");
   }
 
   // Update lastUsedAt in the background (fire-and-forget) to not block the request

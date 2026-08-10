@@ -26,36 +26,38 @@ export class InMemoryPayoutProvider implements IPayoutProvider {
     switch (InMemoryPayoutProvider.nextAction) {
       case "SUCCESS":
         return {
-          isPending: false,
-          isSuccess: true,
-          isFailure: false,
+          outcome: "ACCEPTED",
           providerReference: `MOCK_REF_${payoutId}`,
         };
       case "FAILED":
         return {
-          isPending: false,
-          isSuccess: false,
-          isFailure: true,
+          outcome: "REJECTED",
           failureReason: "MOCK_INSUFFICIENT_PROVIDER_BALANCE",
         };
       case "TIMEOUT":
         return {
-          isPending: true,
-          isSuccess: false,
-          isFailure: false,
+          outcome: "TIMEOUT",
           providerReference: `MOCK_PENDING_${payoutId}`,
         };
       case "NETWORK_ERROR":
-        throw new Error("MOCK_NETWORK_ERROR - Connection Refused");
+        // Simulated network error explicitly translates to a NETWORK_ERROR outcome
+        // instead of throwing an unhandled exception for better orchestration control
+        return {
+          outcome: "NETWORK_ERROR",
+          failureReason: "Connection Refused",
+        };
     }
   }
 
   async status(payoutId: string, providerReference?: string): Promise<ProviderDispatchResult> {
     return {
-      isPending: false,
-      isSuccess: true,
-      isFailure: false,
+      outcome: "ACCEPTED",
       providerReference: providerReference || `MOCK_REF_${payoutId}`,
     };
+  }
+
+  verifyWebhookSignature(rawBody: string, signature: string | null, secret: string): boolean {
+    // For mock testing, we just check if signature matches secret
+    return signature === secret;
   }
 }
