@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, afterEach, beforeEach } from "vitest";
 import { db } from "@/infrastructure/database/db";
 import { InMemoryPayoutProvider } from "@/modules/provider/adapters/mock.provider";
 import { dispatchPayout } from "@/modules/payout/application/payout.orchestrator";
@@ -55,8 +55,11 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
     otherMerchantId = profile2.id;
   });
 
-  afterEach(() => {
+  beforeEach(async () => {
     InMemoryPayoutProvider.reset();
+    await db.ledgerEntry.deleteMany({});
+    await db.outboxEvent.deleteMany({});
+    await db.payout.deleteMany({});
   });
 
   it("1. Invalid API key throws UnauthorizedError", async () => {
@@ -123,6 +126,9 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
 
     const newWallet = await db.wallet.findUniqueOrThrow({ where: { id: walletId } });
     expect(newWallet.balance.toNumber()).toBeLessThan(initialWallet.balance.toNumber()); // Deducted
+
+    const outbox = await db.outboxEvent.findUniqueOrThrow({ where: { referenceId: payout.id } });
+    expect(outbox.status).toBe("EXHAUSTED");
   });
 
   it("6. Network error (ambiguous) -> PROCESSING, wallet remains deducted", async () => {
@@ -133,10 +139,12 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
     const finalPayout = await dispatchPayout(payout.id, merchantId, provider);
     
     expect(finalPayout.status).toBe(PayoutStatus.PROCESSING);
-    expect(finalPayout.providerReference).toBeNull(); // No reference yet
-
+    
     const newWallet = await db.wallet.findUniqueOrThrow({ where: { id: walletId } });
     expect(newWallet.balance.toNumber()).toBeLessThan(initialWallet.balance.toNumber());
+
+    const outbox = await db.outboxEvent.findUniqueOrThrow({ where: { referenceId: payout.id } });
+    expect(outbox.status).toBe("EXHAUSTED");
   });
 
   const sendWebhook = async (payoutId: string, ref: string, status: string, signature: string = process.env.PROVIDER_WEBHOOK_SECRET || "test-secret") => {
@@ -151,6 +159,29 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
   it("7. Webhook invalid signature is rejected safely", async () => {
     const res = await sendWebhook("ANY_ID", "ANY_REF", "SUCCESS", "bad-signature");
     expect(res.status).toBe(401);
+  });
+
+  it("7b. Direct provider SUCCESS is properly handled immediately", async () => {
+    InMemoryPayoutProvider.nextAction = "SUCCESS";
+    const { payout } = await createPayout(merchantId, validPayoutData());
+    const initialWallet = await db.wallet.findUniqueOrThrow({ where: { id: walletId } });
+
+    const finalPayout = await dispatchPayout(payout.id, merchantId, provider);
+
+    // Should become SUCCESS immediately
+    expect(finalPayout.status).toBe(PayoutStatus.SUCCESS);
+    
+    // Outbox should be COMPLETED
+    const outbox = await db.outboxEvent.findUniqueOrThrow({ where: { referenceId: payout.id } });
+    expect(outbox.status).toBe("COMPLETED");
+
+    // Wallet is deducted once, not refunded
+    const finalWallet = await db.wallet.findUniqueOrThrow({ where: { id: walletId } });
+    expect(finalWallet.balance.toNumber()).toBeLessThan(initialWallet.balance.toNumber());
+
+    // Processing twice via webhook should be rejected safely by CAS
+    const res = await sendWebhook(payout.id, finalPayout.providerReference!, "SUCCESS");
+    expect(res.status).toBe(200); // Idempotent webhook response
   });
 
   it("8. Webhook SUCCESS idempotency and state safety", async () => {

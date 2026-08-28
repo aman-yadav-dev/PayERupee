@@ -183,6 +183,18 @@ export async function processPayout(payoutId: string, merchantProfileId: string)
       metadata: { fromStatus: "PENDING", toStatus: "PROCESSING" }
     }, tx);
 
+    // 7. Outbox (Reliable Dispatch)
+    await tx.outboxEvent.create({
+      data: {
+        referenceType: "PAYOUT_DISPATCH",
+        referenceId: payout.id,
+        status: "PENDING",
+        lockedUntil: new Date(Date.now() + 60000), // Lock for 60s for inline orchestrator
+        lockedBy: "inline-orchestrator",
+        attempts: 1 // ATOMIC: Mark as attempted to prevent double-dispatch if inline process crashes during HTTP call
+      }
+    });
+
     return updatedPayout;
   }, { maxWait: 5000, timeout: 20000 });
 }

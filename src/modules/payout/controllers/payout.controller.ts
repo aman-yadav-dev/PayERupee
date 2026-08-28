@@ -7,11 +7,11 @@ import { z } from "zod";
 import { logger } from "@/infrastructure/logger/logger";
 import { checkRateLimit } from "@/shared/utils/rate-limit";
 
-const provider = getPayoutProvider();
-
 export class PayoutController {
   static async create(req: NextRequest): Promise<NextResponse> {
     try {
+      const provider = getPayoutProvider();
+      
       // 1. Authenticate & strictly extract merchantProfileId
       const merchantProfileId = await authenticateApiKey(req.headers.get("Authorization"));
 

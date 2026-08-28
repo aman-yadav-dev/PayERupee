@@ -135,6 +135,9 @@ export class CashfreePayoutProvider implements IPayoutProvider {
       });
 
       if (!res.ok) {
+        if (res.status === 404) {
+          return { outcome: "NOT_FOUND", failureReason: "Transfer not found at provider" };
+        }
         return { outcome: "NETWORK_ERROR", failureReason: "Status check failed" };
       }
 
@@ -142,11 +145,11 @@ export class CashfreePayoutProvider implements IPayoutProvider {
       const status = data.status; // e.g. "SUCCESS", "FAILED", "PENDING", "REVERSED"
 
       if (status === "SUCCESS") {
-        return { outcome: "QUEUED", providerReference: data.reference_id?.toString() };
+        return { outcome: "SUCCESS", providerReference: data.reference_id?.toString() };
       } else if (status === "FAILED" || status === "REVERSED") {
         return { outcome: "REJECTED", failureReason: data.reason || "Transfer failed", providerReference: data.reference_id?.toString() };
       } else {
-        return { outcome: "TIMEOUT", providerReference: data.reference_id?.toString() };
+        return { outcome: "QUEUED", providerReference: data.reference_id?.toString() };
       }
     } catch (e) {
       return { outcome: "NETWORK_ERROR", failureReason: "Network error checking status" };

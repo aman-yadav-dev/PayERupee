@@ -2,8 +2,13 @@ import { env } from "@/config/env";
 import { IPayoutProvider } from "@/modules/provider/core/provider.interface";
 import { CashfreePayoutProvider } from "@/modules/provider/adapters/cashfree.provider";
 import { InMemoryPayoutProvider } from "@/modules/provider/adapters/mock.provider";
+import { PayMyQrPayoutProvider } from "@/modules/provider/adapters/paymyqr.provider";
 
 export function getPayoutProvider(): IPayoutProvider {
+  if (env.PROVIDER_NAME === "PAYMYQR") {
+    return new PayMyQrPayoutProvider();
+  }
+  
   if (env.PROVIDER_NAME === "CASHFREE") {
     return new CashfreePayoutProvider();
   }

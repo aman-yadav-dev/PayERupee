@@ -1,4 +1,4 @@
-export type ProviderOutcome = "QUEUED" | "REJECTED" | "TIMEOUT" | "NETWORK_ERROR";
+export type ProviderOutcome = "QUEUED" | "REJECTED" | "TIMEOUT" | "NETWORK_ERROR" | "NOT_FOUND" | "SUCCESS";
 
 export interface ProviderDispatchResult {
   outcome: ProviderOutcome;

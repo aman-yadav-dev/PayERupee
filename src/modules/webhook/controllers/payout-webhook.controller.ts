@@ -4,11 +4,11 @@ import { db } from "@/infrastructure/database/db";
 import { getPayoutProvider } from "@/modules/provider/adapters/provider.factory";
 import { env } from "@/config/env";
 
-const provider = getPayoutProvider();
-
 export class PayoutWebhookController {
   static async handleWebhook(req: NextRequest): Promise<NextResponse> {
     try {
+      const provider = getPayoutProvider();
+      
       const headersObj: Record<string, string> = {};
       req.headers.forEach((value, key) => {
         headersObj[key.toLowerCase()] = value;

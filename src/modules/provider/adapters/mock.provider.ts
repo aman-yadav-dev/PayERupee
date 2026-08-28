@@ -1,6 +1,6 @@
-import { IPayoutProvider, ProviderDispatchResult, NormalizedWebhookEvent } from "@/modules/provider/core/provider.interface";
+import { IPayoutProvider, ProviderDispatchResult, NormalizedWebhookEvent, ProviderOutcome } from "@/modules/provider/core/provider.interface";
 
-type MockAction = "QUEUED" | "FAILED" | "TIMEOUT" | "NETWORK_ERROR";
+type MockAction = "QUEUED" | "FAILED" | "TIMEOUT" | "NETWORK_ERROR" | "SUCCESS";
 
 export class InMemoryPayoutProvider implements IPayoutProvider {
   // Configurable state to simulate different conditions in tests
@@ -9,6 +9,7 @@ export class InMemoryPayoutProvider implements IPayoutProvider {
 
   public static reset() {
     this.nextAction = "QUEUED";
+    this.nextStatusOutcome = "QUEUED";
     this.latencyMs = 0;
   }
 
@@ -41,6 +42,11 @@ export class InMemoryPayoutProvider implements IPayoutProvider {
           outcome: "TIMEOUT",
           providerReference: `MOCK_PENDING_${payoutId}`,
         };
+      case "SUCCESS":
+        return {
+          outcome: "SUCCESS",
+          providerReference: `MOCK_REF_${payoutId}`,
+        };
       case "NETWORK_ERROR":
         // Simulated network error explicitly translates to a NETWORK_ERROR outcome
         // instead of throwing an unhandled exception for better orchestration control
@@ -51,10 +57,18 @@ export class InMemoryPayoutProvider implements IPayoutProvider {
     }
   }
 
+  // Simulate status outcomes
+  public static nextStatusOutcome: ProviderOutcome = "QUEUED";
+
   async status(payoutId: string, providerReference?: string): Promise<ProviderDispatchResult> {
+    if (InMemoryPayoutProvider.latencyMs > 0) {
+      await new Promise(r => setTimeout(r, InMemoryPayoutProvider.latencyMs));
+    }
+    
     return {
-      outcome: "QUEUED",
+      outcome: InMemoryPayoutProvider.nextStatusOutcome,
       providerReference: providerReference || `MOCK_REF_${payoutId}`,
+      failureReason: InMemoryPayoutProvider.nextStatusOutcome === "REJECTED" ? "Mock status failed" : undefined
     };
   }
 

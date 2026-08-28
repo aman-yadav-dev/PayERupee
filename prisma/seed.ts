@@ -55,6 +55,25 @@ async function main() {
     console.log('SYSTEM_REVENUE INR account already exists.')
   }
 
+  // 3. Seed System Settings
+  const settingsCount = await prisma.systemSetting.count()
+  if (settingsCount === 0) {
+    await prisma.systemSetting.create({
+      data: {
+        id: "GLOBAL_SETTINGS",
+        upiPayoutFee: 0,
+        impsPayoutFee: 5,
+        neftPayoutFee: 3,
+        rtgsPayoutFee: 10,
+        taxPercentage: 18,
+        minPayoutAmount: 10,
+        maxPayoutAmount: 500000,
+        reconciliationThresholdMins: 15,
+      }
+    })
+    console.log('Created GLOBAL_SETTINGS.')
+  }
+
   console.log('Seeding completed successfully.')
 }
 

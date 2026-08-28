@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/outbox",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/reconciler",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}

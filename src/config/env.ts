@@ -25,6 +25,14 @@ const envSchema = z.object({
   CASHFREE_CLIENT_SECRET: z.string().optional(),
   CASHFREE_WEBHOOK_SECRET: z.string().optional(),
   CASHFREE_ENVIRONMENT: z.enum(["TEST", "PRODUCTION"]).default("TEST"),
+
+  // PayMyQR Configuration
+  PAYMYQR_BASE_URL: z.string().url("PAYMYQR_BASE_URL must be a valid URL").optional(),
+  PAYMYQR_VENDOR_ID: z.string().optional(),
+  PAYMYQR_SECURITY_TOKEN: z.string().optional(),
+
+  // Background Workers
+  CRON_SECRET: z.string().optional(),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
