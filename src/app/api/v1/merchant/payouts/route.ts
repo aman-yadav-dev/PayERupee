@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticateSession, UnauthorizedError, ForbiddenError } from "@/modules/auth/application/session-auth.service";
+import { requireFullMerchantAccess, UnauthorizedError, ForbiddenError } from "@/modules/auth/application/session-auth.service";
 import { db } from "@/infrastructure/database/db";
 import { Prisma } from "@prisma/client";
 
 export async function GET(req: NextRequest) {
   try {
     // 1. Authenticate & derive tenant context securely
-    const { merchantProfileId } = await authenticateSession(req);
+    const { merchantProfileId } = await requireFullMerchantAccess(req);
 
     // 2. Parse basic pagination safely
     const url = new URL(req.url);

@@ -27,7 +27,7 @@ describe("Merchant UI APIs (Tenant Isolation)", () => {
   beforeEach(async () => {
     // Let errors bubble up. If DB is down, this will throw ECONNREFUSED and legitimately fail the test execution.
     // We create two completely separate merchants to test cross-tenant isolation.
-    
+
     await db.ledgerAccount.create({
       data: { id: "sys-transit", type: "SYSTEM_TRANSIT", currency: "INR" }
     });
@@ -36,8 +36,11 @@ describe("Merchant UI APIs (Tenant Isolation)", () => {
     await db.user.create({
       data: { id: mockUserIdA, name: "User A", email: "user_a@test.com" }
     });
-    await db.merchantProfile.create({
-      data: { id: mockMerchantIdA, userId: mockUserIdA, businessName: "Merchant A" }
+        await db.merchantProfile.create({
+      data: { id: mockMerchantIdA, userId: mockUserIdA, businessName: "Merchant A", accountStatus: "ACTIVE" }
+    });
+    await db.kycApplication.create({
+      data: { merchantProfileId: mockMerchantIdA, status: "APPROVED", documentUrls: {} }
     });
     await db.ledgerAccount.create({
       data: { id: mockLedgerAccountIdA, merchantProfileId: mockMerchantIdA, type: "MERCHANT_LIABILITY", currency: "INR" }
@@ -56,8 +59,11 @@ describe("Merchant UI APIs (Tenant Isolation)", () => {
     await db.user.create({
       data: { id: mockUserIdB, name: "User B", email: "user_b@test.com" }
     });
-    await db.merchantProfile.create({
-      data: { id: mockMerchantIdB, userId: mockUserIdB, businessName: "Merchant B" }
+        await db.merchantProfile.create({
+      data: { id: mockMerchantIdB, userId: mockUserIdB, businessName: "Merchant B", accountStatus: "ACTIVE" }
+    });
+    await db.kycApplication.create({
+      data: { merchantProfileId: mockMerchantIdB, status: "APPROVED", documentUrls: {} }
     });
     await db.ledgerAccount.create({
       data: { id: mockLedgerAccountIdB, merchantProfileId: mockMerchantIdB, type: "MERCHANT_LIABILITY", currency: "INR" }
@@ -75,6 +81,7 @@ describe("Merchant UI APIs (Tenant Isolation)", () => {
 
   afterEach(async () => {
     try {
+      await db.kycApplication.deleteMany();
       await db.ledgerEntry.deleteMany();
       await db.payout.deleteMany();
       await db.wallet.deleteMany();
@@ -166,7 +173,7 @@ describe("Merchant UI APIs (Tenant Isolation)", () => {
     const res = await getWallet(req);
     const body = await res.json();
     // B's session returns B's wallet (50.00), not A's (100.00)
-    expect(body.data.balance).toBe("50"); 
+    expect(body.data.balance).toBe("50");
   });
 
   // 9. pagination limit is capped at 100
@@ -189,4 +196,81 @@ describe("Merchant UI APIs (Tenant Isolation)", () => {
     expect(body.pagination.page).toBe(1);
     expect(body.pagination.limit).toBe(20);
   });
+
+  describe("Merchant Full-Access Gate Restrictions", () => {
+    let testCount = 0;
+
+    async function createRestrictedMerchant(accountStatus: string, kycStatus: string | null) {
+      testCount++;
+      const uId = `test-user-res-${testCount}`;
+      const mId = `test-merchant-res-${testCount}`;
+      await db.user.create({ data: { id: uId, name: "Restricted", email: `res${testCount}@test.com` } });
+      await db.merchantProfile.create({
+        data: { id: mId, userId: uId, businessName: "Restricted", accountStatus: accountStatus as any }
+      });
+      if (kycStatus) {
+        await db.kycApplication.create({
+          data: { merchantProfileId: mId, status: kycStatus as any, documentUrls: {} }
+        });
+      }
+      return uId;
+    }
+
+    it("rejects PENDING merchant (403)", async () => {
+      const uId = await createRestrictedMerchant("PENDING", null);
+      (auth.api.getSession as any).mockResolvedValue({ user: { id: uId } });
+      const req = new NextRequest("http://localhost/api/v1/merchant/wallet");
+      const res = await getWallet(req);
+      expect(res.status).toBe(403);
+    });
+
+    it("rejects SUSPENDED merchant (403)", async () => {
+      const uId = await createRestrictedMerchant("SUSPENDED", "APPROVED");
+      (auth.api.getSession as any).mockResolvedValue({ user: { id: uId } });
+      const req = new NextRequest("http://localhost/api/v1/merchant/wallet");
+      const res = await getWallet(req);
+      expect(res.status).toBe(403);
+    });
+
+    it("rejects DELETED merchant (403)", async () => {
+      const uId = await createRestrictedMerchant("DELETED", "APPROVED");
+      (auth.api.getSession as any).mockResolvedValue({ user: { id: uId } });
+      const req = new NextRequest("http://localhost/api/v1/merchant/wallet");
+      const res = await getWallet(req);
+      expect(res.status).toBe(403);
+    });
+
+    it("rejects ACTIVE + no KYC merchant (403)", async () => {
+      const uId = await createRestrictedMerchant("ACTIVE", null);
+      (auth.api.getSession as any).mockResolvedValue({ user: { id: uId } });
+      const req = new NextRequest("http://localhost/api/v1/merchant/wallet");
+      const res = await getWallet(req);
+      expect(res.status).toBe(403);
+    });
+
+    it("rejects ACTIVE + PENDING_SUBMISSION merchant (403)", async () => {
+      const uId = await createRestrictedMerchant("ACTIVE", "PENDING_SUBMISSION");
+      (auth.api.getSession as any).mockResolvedValue({ user: { id: uId } });
+      const req = new NextRequest("http://localhost/api/v1/merchant/wallet");
+      const res = await getWallet(req);
+      expect(res.status).toBe(403);
+    });
+
+    it("rejects ACTIVE + UNDER_REVIEW merchant (403)", async () => {
+      const uId = await createRestrictedMerchant("ACTIVE", "UNDER_REVIEW");
+      (auth.api.getSession as any).mockResolvedValue({ user: { id: uId } });
+      const req = new NextRequest("http://localhost/api/v1/merchant/wallet");
+      const res = await getWallet(req);
+      expect(res.status).toBe(403);
+    });
+
+    it("rejects ACTIVE + REJECTED merchant (403)", async () => {
+      const uId = await createRestrictedMerchant("ACTIVE", "REJECTED");
+      (auth.api.getSession as any).mockResolvedValue({ user: { id: uId } });
+      const req = new NextRequest("http://localhost/api/v1/merchant/wallet");
+      const res = await getWallet(req);
+      expect(res.status).toBe(403);
+    });
+  });
+
 });

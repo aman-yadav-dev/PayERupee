@@ -43,6 +43,10 @@ export class PayoutController {
         logger.error("Unauthorized payout attempt", error);
         return NextResponse.json({ success: false, error: error.message }, { status: 401 });
       }
+      if (error instanceof Error && error.name === "ForbiddenError") {
+        logger.error("Forbidden payout attempt", error);
+        return NextResponse.json({ success: false, error: error.message }, { status: 403 });
+      }
       if (error instanceof z.ZodError) {
         const zodErr = error as any;
         logger.error("Validation failed", zodErr.errors);
