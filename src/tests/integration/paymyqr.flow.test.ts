@@ -14,8 +14,10 @@ vi.mock("@/infrastructure/database/db", () => ({
   db: {
     outboxEvent: { findMany: vi.fn(), updateMany: vi.fn(), update: vi.fn(), findUnique: vi.fn() },
     payout: { findUnique: vi.fn(), update: vi.fn(), findMany: vi.fn() },
-    systemSetting: { findUnique: vi.fn() }
-  }
+    systemSetting: { findUnique: vi.fn() },
+    $disconnect: vi.fn()
+  },
+  pool: { end: vi.fn() }
 }));
 
 vi.mock("@/modules/system/domain/lease.service", () => ({
