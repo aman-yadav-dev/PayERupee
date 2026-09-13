@@ -1,5 +1,9 @@
 import { db } from "@/infrastructure/database/db";
 import { KycDataType, KycInputType } from "@prisma/client";
+import { LocalDiskStorageAdapter } from "@/infrastructure/storage/local-disk.adapter";
+import crypto from "crypto";
+
+const storageProvider = new LocalDiskStorageAdapter();
 
 export class ApplicationNotFoundError extends Error {
   constructor() {
@@ -33,6 +37,13 @@ export class KycValidationError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "KycValidationError";
+  }
+}
+
+export class InvalidMagicBytesError extends KycValidationError {
+  constructor() {
+    super("Unsupported file format or invalid magic bytes.");
+    this.name = "InvalidMagicBytesError";
   }
 }
 
@@ -87,7 +98,7 @@ export async function getActiveKycForm(merchantProfileId: string) {
   }
 
   // Filter fields applicable to this merchant type
-  const applicableFields = form.fields.filter(field => 
+  const applicableFields = form.fields.filter(field =>
     field.applicableTypes.length === 0 || field.applicableTypes.includes(profile.merchantType!)
   );
 
@@ -166,7 +177,7 @@ export async function saveKycAnswers(merchantProfileId: string, answers: { field
   } else {
     activeFormVersionId = application.formVersionId;
   }
-  
+
   if (!activeFormVersionId) {
     throw new FormNotFoundError();
   }
@@ -192,7 +203,7 @@ export async function saveKycAnswers(merchantProfileId: string, answers: { field
     // Since this is a DRAFT, we skip isRequired validation.
     // However, if a value IS provided (not null/undefined/empty string), we must validate its type.
     if (ans.value !== null && ans.value !== undefined && ans.value !== "") {
-      
+
       // Basic type validation
       if (field.dataType === "STRING") {
         if (typeof ans.value !== "string") throw new KycValidationError(`Field ${field.key} expects a string.`);
@@ -243,4 +254,205 @@ export async function saveKycAnswers(merchantProfileId: string, answers: { field
   }
 
   return { applicationId: application.id, status: application.status, savedCount: validAnswers.length };
+}
+
+export function detectMimeType(buffer: Buffer): string | null {
+  if (buffer.length < 4) return null;
+  // PDF: %PDF
+  if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) return 'application/pdf';
+  // JPEG: FF D8 FF
+  if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) return 'image/jpeg';
+  // PNG: 89 50 4E 47
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) return 'image/png';
+  return null;
+}
+
+export async function uploadKycDocument(merchantProfileId: string, fieldId: string, buffer: Buffer, originalFilename: string) {
+  const profile = await db.merchantProfile.findUnique({
+    where: { id: merchantProfileId },
+    select: { merchantType: true }
+  });
+
+  if (!profile?.merchantType) throw new MerchantTypeMissingError();
+
+  const application = await db.kycApplication.findUnique({ where: { merchantProfileId } });
+  if (!application) throw new ApplicationNotFoundError();
+
+  if (application.status === "UNDER_REVIEW" || application.status === "APPROVED") {
+    throw new KycStateError(`Cannot modify application in ${application.status} state.`);
+  }
+  if (application.status === "REJECTED" && !application.allowResubmission) {
+    throw new KycStateError("Resubmission is not allowed for this application.");
+  }
+
+  if (!application.formVersionId) throw new FormNotFoundError();
+
+  const field = await db.kycFieldDefinition.findUnique({
+    where: { id: fieldId }
+  });
+
+  if (!field || field.formVersionId !== application.formVersionId) {
+    throw new KycValidationError("Invalid field definition.");
+  }
+  if (field.dataType !== "FILE") {
+    throw new KycValidationError("Field is not a FILE type.");
+  }
+  if (field.applicableTypes.length > 0 && !field.applicableTypes.includes(profile.merchantType)) {
+    throw new KycValidationError("Field not applicable to this merchant type.");
+  }
+
+  const mimeType = detectMimeType(buffer);
+  if (!mimeType) {
+    throw new InvalidMagicBytesError();
+  }
+
+  const fileRules = field.fileRules as any || {};
+  const maxFiles = fileRules.maxFiles || 1;
+  const maxSize = fileRules.maxSize || 5 * 1024 * 1024; // Default 5MB
+
+  if (buffer.length > maxSize) {
+    throw new KycValidationError("File exceeds maximum allowed size.");
+  }
+
+  const docRecord = await db.$transaction(async (tx) => {
+    // Acquire row-level lock on the application
+    await tx.kycApplication.update({
+      where: { id: application.id },
+      data: { updatedAt: new Date() }
+    });
+
+    const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const count = await tx.kycDocument.count({
+      where: {
+        applicationId: application.id,
+        fieldDefinitionId: field.id,
+        OR: [
+          { status: "UPLOADED" },
+          { status: "PENDING", createdAt: { gte: fiveMinsAgo } }
+        ]
+      }
+    });
+
+    if (count >= maxFiles) {
+      throw new KycStateError("Maximum number of files exceeded for this field.");
+    }
+
+    const uuid = crypto.randomUUID();
+    const storageKey = `kyc_documents/${application.id}/${uuid}`;
+
+    return tx.kycDocument.create({
+      data: {
+        applicationId: application.id,
+        fieldDefinitionId: field.id,
+        storageKey,
+        originalFilename: originalFilename.substring(0, 255), // Sanitize max length
+        mimeType,
+        sizeBytes: buffer.length,
+        status: "PENDING"
+      }
+    });
+  });
+
+  // Perform physical storage write
+  try {
+    await storageProvider.put(docRecord.storageKey, buffer, docRecord.mimeType);
+  } catch (error) {
+    // We explicitly do NOT delete the DB record here. We leave it as PENDING.
+    throw error;
+  }
+
+  // Update DB to UPLOADED
+  const updatedDoc = await db.kycDocument.update({
+    where: { id: docRecord.id },
+    data: { status: "UPLOADED" }
+  });
+
+  return {
+    id: updatedDoc.id,
+    originalFilename: updatedDoc.originalFilename,
+    mimeType: updatedDoc.mimeType,
+    sizeBytes: updatedDoc.sizeBytes,
+    createdAt: updatedDoc.createdAt
+  };
+}
+
+export async function listKycDocuments(merchantProfileId: string) {
+  const application = await db.kycApplication.findUnique({
+    where: { merchantProfileId },
+    select: { id: true }
+  });
+
+  if (!application) return [];
+
+  const docs = await db.kycDocument.findMany({
+    where: { applicationId: application.id },
+    select: {
+      id: true,
+      fieldDefinitionId: true,
+      originalFilename: true,
+      mimeType: true,
+      sizeBytes: true,
+      status: true,
+      createdAt: true
+    }
+  });
+
+  return docs;
+}
+
+export async function getKycDocumentForDownload(merchantProfileId: string, documentId: string) {
+  const application = await db.kycApplication.findUnique({
+    where: { merchantProfileId },
+    select: { id: true }
+  });
+  if (!application) throw new ApplicationNotFoundError();
+
+  const doc = await db.kycDocument.findUnique({
+    where: {
+      id: documentId,
+      applicationId: application.id
+    }
+  });
+
+  if (!doc) throw new KycValidationError("Document not found");
+  if (doc.status !== "UPLOADED") throw new KycValidationError("Document is not available for download");
+
+  const buffer = await storageProvider.get(doc.storageKey);
+  return {
+    buffer,
+    mimeType: doc.mimeType,
+    originalFilename: doc.originalFilename
+  };
+}
+
+export async function deleteKycDocument(merchantProfileId: string, documentId: string) {
+  const application = await db.kycApplication.findUnique({
+    where: { merchantProfileId },
+    select: { id: true, status: true, allowResubmission: true }
+  });
+  if (!application) throw new ApplicationNotFoundError();
+
+  if (application.status === "UNDER_REVIEW" || application.status === "APPROVED") {
+    throw new KycStateError(`Cannot modify application in ${application.status} state.`);
+  }
+  if (application.status === "REJECTED" && !application.allowResubmission) {
+    throw new KycStateError("Resubmission is not allowed for this application.");
+  }
+
+  const doc = await db.kycDocument.findUnique({
+    where: {
+      id: documentId,
+      applicationId: application.id
+    }
+  });
+
+  if (!doc) throw new KycValidationError("Document not found");
+
+  // DB Delete First
+  await db.kycDocument.delete({
+    where: { id: doc.id }
+  });
+
+  // Storage Delete Second
+  await storageProvider.delete(doc.storageKey);
 }
