@@ -297,7 +297,6 @@ model KycApplication {
   id                String    @id @default(cuid())
   merchantProfileId String    @unique
   formVersionId     String?
-  documentUrls      Json?
   status            KycStatus @default(PENDING_SUBMISSION)
 
   rejectionReason   String?   @db.Text

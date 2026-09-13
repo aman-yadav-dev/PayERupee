@@ -41,7 +41,7 @@ describe("M2M Payouts API Authentication & Authorization", () => {
     });
     if (kycStatus) {
       await db.kycApplication.create({
-        data: { merchantProfileId: mockMerchantId, status: kycStatus as any, documentUrls: {} }
+        data: { merchantProfileId: mockMerchantId, status: kycStatus as any }
       });
     }
     await db.ledgerAccount.create({
