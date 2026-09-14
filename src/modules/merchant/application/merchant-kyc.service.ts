@@ -1,20 +1,21 @@
 import { db } from "@/infrastructure/database/db";
-import { KycDataType, KycInputType } from "@prisma/client";
 import { LocalDiskStorageAdapter } from "@/infrastructure/storage/local-disk.adapter";
+import { logAction } from "@/modules/audit/domain/audit.service";
+import { AuditActorType, AuditEntity, AuditAction, MerchantType } from "@prisma/client";
 import crypto from "crypto";
 
 const storageProvider = new LocalDiskStorageAdapter();
 
 export class ApplicationNotFoundError extends Error {
   constructor() {
-    super("KYC application not found.");
+    super("Application not found.");
     this.name = "ApplicationNotFoundError";
   }
 }
 
 export class FormNotFoundError extends Error {
   constructor() {
-    super("No applicable published KYC form found.");
+    super("Published KYC form not found.");
     this.name = "FormNotFoundError";
   }
 }
@@ -47,19 +48,36 @@ export class InvalidMagicBytesError extends KycValidationError {
   }
 }
 
+export class KycCompletenessError extends Error {
+  public errors: { fieldKey: string, message: string }[];
+  constructor(errors: { fieldKey: string, message: string }[]) {
+    super("KYC Completeness Validation Failed");
+    this.name = "KycCompletenessError";
+    this.errors = errors;
+  }
+}
+
 export async function getMerchantKycApplication(merchantProfileId: string) {
   const application = await db.kycApplication.findUnique({
     where: { merchantProfileId },
     select: {
       id: true,
       status: true,
-      formVersionId: true,
       submittedAt: true,
       reviewedAt: true,
       rejectionReason: true,
       allowResubmission: true,
       createdAt: true,
       updatedAt: true,
+      formVersion: {
+        select: {
+          id: true,
+          versionNumber: true,
+          form: {
+            select: { name: true }
+          }
+        }
+      },
       answers: {
         select: {
           fieldDefinitionId: true,
@@ -68,8 +86,7 @@ export async function getMerchantKycApplication(merchantProfileId: string) {
       }
     }
   });
-
-  return application; // Can be null, which is standard when an application hasn't been created
+  return application;
 }
 
 export async function getActiveKycForm(merchantProfileId: string) {
@@ -78,7 +95,8 @@ export async function getActiveKycForm(merchantProfileId: string) {
     select: { merchantType: true }
   });
 
-  if (!profile?.merchantType) {
+  const merchantType = profile?.merchantType as MerchantType | undefined;
+  if (!merchantType) {
     throw new MerchantTypeMissingError();
   }
 
@@ -99,7 +117,7 @@ export async function getActiveKycForm(merchantProfileId: string) {
 
   // Filter fields applicable to this merchant type
   const applicableFields = form.fields.filter(field =>
-    field.applicableTypes.length === 0 || field.applicableTypes.includes(profile.merchantType!)
+    field.applicableTypes.length === 0 || field.applicableTypes.includes(merchantType)
   );
 
   return {
@@ -112,7 +130,6 @@ export async function getActiveKycForm(merchantProfileId: string) {
       key: f.key,
       label: f.label,
       description: f.description,
-      section: f.section,
       dataType: f.dataType,
       inputType: f.inputType,
       isRequired: f.isRequired,
@@ -124,110 +141,102 @@ export async function getActiveKycForm(merchantProfileId: string) {
   };
 }
 
+export function validateFieldValue(field: any, value: any): void {
+  if (field.dataType === "STRING") {
+    if (typeof value !== "string") throw new KycValidationError(`Field ${field.key} expects a string.`);
+  } else if (field.dataType === "NUMBER") {
+    if (typeof value !== "number") throw new KycValidationError(`Field ${field.key} expects a number.`);
+  } else if (field.dataType === "BOOLEAN") {
+    if (typeof value !== "boolean") throw new KycValidationError(`Field ${field.key} expects a boolean.`);
+  } else if (field.dataType === "DATE") {
+    if (typeof value !== "string" || isNaN(Date.parse(value))) throw new KycValidationError(`Field ${field.key} expects a valid ISO date string.`);
+  } else if (field.dataType === "FILE") {
+    throw new KycValidationError(`File upload is not supported in this phase.`);
+  } else {
+    throw new KycValidationError(`Unsupported data type ${field.dataType} for field ${field.key}.`);
+  }
+
+  // SELECT validation
+  if (field.inputType === "SELECT") {
+    const options = field.selectOptions as string[] | undefined;
+    if (options && Array.isArray(options)) {
+      if (!options.includes(value as string)) {
+        throw new KycValidationError(`Value '${value}' is not a valid option for field ${field.key}.`);
+      }
+    }
+  }
+}
+
 export async function saveKycAnswers(merchantProfileId: string, answers: { fieldId: string, value: any }[]) {
   const profile = await db.merchantProfile.findUnique({
     where: { id: merchantProfileId },
     select: { merchantType: true }
   });
 
-  if (!profile?.merchantType) {
+  const merchantType = profile?.merchantType as MerchantType | undefined;
+  if (!merchantType) {
     throw new MerchantTypeMissingError();
   }
 
-  // Find or create application
-  let application = await db.kycApplication.findUnique({ where: { merchantProfileId } });
+  return await db.$transaction(async (tx) => {
+    // Find or create application
+    let application = await tx.kycApplication.findUnique({ where: { merchantProfileId } });
 
-  if (!application) {
-    // If we need to create one, find the currently active form
-    const formVersion = await db.kycFormVersion.findFirst({
-      where: { status: "PUBLISHED" },
-      orderBy: { publishedAt: "desc" }
-    });
+    if (!application) {
+      const formVersion = await tx.kycFormVersion.findFirst({
+        where: { status: "PUBLISHED" },
+        orderBy: { publishedAt: "desc" }
+      });
 
-    if (!formVersion) {
+      if (!formVersion) {
+        throw new FormNotFoundError();
+      }
+
+      application = await tx.kycApplication.create({
+        data: {
+          merchantProfileId,
+          formVersionId: formVersion.id,
+          status: "PENDING_SUBMISSION",
+          allowResubmission: true
+        }
+      });
+    } else {
+      // Lock the application for concurrency correctness
+      application = await tx.kycApplication.update({
+        where: { id: application.id },
+        data: { updatedAt: new Date() }
+      });
+    }
+
+    // Validate State
+    if (application.status === "UNDER_REVIEW" || application.status === "APPROVED") {
+      throw new KycStateError(`Cannot modify application in ${application.status} state.`);
+    }
+
+    if (application.status === "REJECTED" && !application.allowResubmission) {
+      throw new KycStateError("Resubmission is not allowed for this application.");
+    }
+
+    if (!application.formVersionId) {
       throw new FormNotFoundError();
     }
 
-    application = await db.kycApplication.create({
-      data: {
-        merchantProfileId,
-        formVersionId: formVersion.id,
-        status: "PENDING_SUBMISSION",
-        allowResubmission: true
-      }
+    const fields = await tx.kycFieldDefinition.findMany({
+      where: { formVersionId: application.formVersionId }
     });
-  }
 
-  // Validate State
-  if (application.status === "UNDER_REVIEW" || application.status === "APPROVED") {
-    throw new KycStateError(`Cannot modify application in ${application.status} state.`);
-  }
-
-  if (application.status === "REJECTED" && !application.allowResubmission) {
-    throw new KycStateError("Resubmission is not allowed for this application.");
-  }
-
-  let activeFormVersionId: string | null = null;
-  if (!application) {
-    const formVersion = await db.kycFormVersion.findFirst({
-      where: { status: "PUBLISHED" },
-      orderBy: { publishedAt: "desc" }
-    });
-    activeFormVersionId = formVersion?.id ?? null;
-  } else {
-    activeFormVersionId = application.formVersionId;
-  }
-
-  if (!activeFormVersionId) {
-    throw new FormNotFoundError();
-  }
-
-  // Fetch the fields for this application's form version
-  const formFields = await db.kycFieldDefinition.findMany({
-    where: { formVersionId: activeFormVersionId }
-  });
-
-  const validAnswers = [];
-
-  for (const ans of answers) {
-    const field = formFields.find(f => f.id === ans.fieldId);
-
-    if (!field) {
-      throw new KycValidationError(`Field ${ans.fieldId} does not exist in this form version.`);
-    }
-
-    if (field.applicableTypes.length > 0 && !field.applicableTypes.includes(profile.merchantType)) {
-      throw new KycValidationError(`Field ${field.key} is not applicable to merchant type ${profile.merchantType}.`);
-    }
-
-    // Since this is a DRAFT, we skip isRequired validation.
-    // However, if a value IS provided (not null/undefined/empty string), we must validate its type.
-    if (ans.value !== null && ans.value !== undefined && ans.value !== "") {
-
-      // Basic type validation
-      if (field.dataType === "STRING") {
-        if (typeof ans.value !== "string") throw new KycValidationError(`Field ${field.key} expects a string.`);
-      } else if (field.dataType === "NUMBER") {
-        if (typeof ans.value !== "number" || isNaN(ans.value)) throw new KycValidationError(`Field ${field.key} expects a number.`);
-      } else if (field.dataType === "BOOLEAN") {
-        if (typeof ans.value !== "boolean") throw new KycValidationError(`Field ${field.key} expects a boolean.`);
-      } else if (field.dataType === "DATE") {
-        if (typeof ans.value !== "string" || isNaN(Date.parse(ans.value))) throw new KycValidationError(`Field ${field.key} expects a valid ISO date string.`);
-      } else if (field.dataType === "FILE") {
-        throw new KycValidationError(`File upload is not supported in this phase.`);
-      } else {
-        throw new KycValidationError(`Unsupported data type ${field.dataType} for field ${field.key}.`);
+    const validAnswers = [];
+    for (const ans of answers) {
+      const field = fields.find(f => f.id === ans.fieldId);
+      if (!field) {
+        throw new KycValidationError(`Field ${ans.fieldId} does not exist in this form version.`);
       }
 
-      // SELECT validation
-      if (field.inputType === "SELECT") {
-        const options = field.selectOptions as string[] | undefined;
-        if (options && Array.isArray(options)) {
-          if (!options.includes(ans.value as string)) {
-            throw new KycValidationError(`Value '${ans.value}' is not a valid option for field ${field.key}.`);
-          }
-        }
+      if (field.applicableTypes.length > 0 && !field.applicableTypes.includes(merchantType)) {
+        throw new KycValidationError(`Field ${field.key} is not applicable to this merchant type.`);
       }
+
+      validateFieldValue(field, ans.value);
 
       validAnswers.push({
         applicationId: application.id,
@@ -235,12 +244,9 @@ export async function saveKycAnswers(merchantProfileId: string, answers: { field
         value: ans.value
       });
     }
-  }
 
-  // Upsert all valid answers safely in a transaction
-  if (validAnswers.length > 0) {
-    await db.$transaction(
-      validAnswers.map(ans => db.kycAnswer.upsert({
+    if (validAnswers.length > 0) {
+      await Promise.all(validAnswers.map(ans => tx.kycAnswer.upsert({
         where: {
           applicationId_fieldDefinitionId: {
             applicationId: ans.applicationId,
@@ -249,11 +255,11 @@ export async function saveKycAnswers(merchantProfileId: string, answers: { field
         },
         create: ans,
         update: { value: ans.value }
-      }))
-    );
-  }
+      })));
+    }
 
-  return { applicationId: application.id, status: application.status, savedCount: validAnswers.length };
+    return { applicationId: application.id, status: application.status, savedCount: validAnswers.length };
+  });
 }
 
 export function detectMimeType(buffer: Buffer): string | null {
@@ -273,17 +279,11 @@ export async function uploadKycDocument(merchantProfileId: string, fieldId: stri
     select: { merchantType: true }
   });
 
-  if (!profile?.merchantType) throw new MerchantTypeMissingError();
+  const merchantType = profile?.merchantType as MerchantType | undefined;
+  if (!merchantType) throw new MerchantTypeMissingError();
 
   const application = await db.kycApplication.findUnique({ where: { merchantProfileId } });
   if (!application) throw new ApplicationNotFoundError();
-
-  if (application.status === "UNDER_REVIEW" || application.status === "APPROVED") {
-    throw new KycStateError(`Cannot modify application in ${application.status} state.`);
-  }
-  if (application.status === "REJECTED" && !application.allowResubmission) {
-    throw new KycStateError("Resubmission is not allowed for this application.");
-  }
 
   if (!application.formVersionId) throw new FormNotFoundError();
 
@@ -297,7 +297,7 @@ export async function uploadKycDocument(merchantProfileId: string, fieldId: stri
   if (field.dataType !== "FILE") {
     throw new KycValidationError("Field is not a FILE type.");
   }
-  if (field.applicableTypes.length > 0 && !field.applicableTypes.includes(profile.merchantType)) {
+  if (field.applicableTypes.length > 0 && !field.applicableTypes.includes(merchantType)) {
     throw new KycValidationError("Field not applicable to this merchant type.");
   }
 
@@ -315,16 +315,23 @@ export async function uploadKycDocument(merchantProfileId: string, fieldId: stri
   }
 
   const docRecord = await db.$transaction(async (tx) => {
-    // Acquire row-level lock on the application
-    await tx.kycApplication.update({
+    // Acquire row-level lock on the application FIRST before making any state-dependent mutation decision
+    const lockedApp = await tx.kycApplication.update({
       where: { id: application.id },
       data: { updatedAt: new Date() }
     });
 
+    if (lockedApp.status === "UNDER_REVIEW" || lockedApp.status === "APPROVED") {
+      throw new KycStateError(`Cannot modify application in ${lockedApp.status} state.`);
+    }
+    if (lockedApp.status === "REJECTED" && !lockedApp.allowResubmission) {
+      throw new KycStateError("Resubmission is not allowed for this application.");
+    }
+
     const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
     const count = await tx.kycDocument.count({
       where: {
-        applicationId: application.id,
+        applicationId: lockedApp.id,
         fieldDefinitionId: field.id,
         OR: [
           { status: "UPLOADED" },
@@ -426,33 +433,196 @@ export async function getKycDocumentForDownload(merchantProfileId: string, docum
 }
 
 export async function deleteKycDocument(merchantProfileId: string, documentId: string) {
-  const application = await db.kycApplication.findUnique({
-    where: { merchantProfileId },
-    select: { id: true, status: true, allowResubmission: true }
-  });
-  if (!application) throw new ApplicationNotFoundError();
+  const docRecord = await db.$transaction(async (tx) => {
+    let application = await tx.kycApplication.findUnique({
+      where: { merchantProfileId },
+      select: { id: true, status: true, allowResubmission: true }
+    });
+    if (!application) throw new ApplicationNotFoundError();
 
-  if (application.status === "UNDER_REVIEW" || application.status === "APPROVED") {
-    throw new KycStateError(`Cannot modify application in ${application.status} state.`);
-  }
-  if (application.status === "REJECTED" && !application.allowResubmission) {
-    throw new KycStateError("Resubmission is not allowed for this application.");
-  }
+    application = await tx.kycApplication.update({
+      where: { id: application.id },
+      data: { updatedAt: new Date() }
+    });
 
-  const doc = await db.kycDocument.findUnique({
-    where: {
-      id: documentId,
-      applicationId: application.id
+    if (application.status === "UNDER_REVIEW" || application.status === "APPROVED") {
+      throw new KycStateError(`Cannot modify application in ${application.status} state.`);
     }
-  });
+    if (application.status === "REJECTED" && !application.allowResubmission) {
+      throw new KycStateError("Resubmission is not allowed for this application.");
+    }
 
-  if (!doc) throw new KycValidationError("Document not found");
+    const doc = await tx.kycDocument.findUnique({
+      where: {
+        id: documentId,
+        applicationId: application.id
+      }
+    });
 
-  // DB Delete First
-  await db.kycDocument.delete({
-    where: { id: doc.id }
+    if (!doc) throw new KycValidationError("Document not found");
+
+    // DB Delete First
+    await tx.kycDocument.delete({
+      where: { id: doc.id }
+    });
+
+    return doc;
   });
 
   // Storage Delete Second
-  await storageProvider.delete(doc.storageKey);
+  await storageProvider.delete(docRecord.storageKey);
+}
+
+export async function submitKycApplication(merchantProfileId: string) {
+  const profile = await db.merchantProfile.findUnique({
+    where: { id: merchantProfileId },
+    select: { merchantType: true }
+  });
+  const merchantType = profile?.merchantType as MerchantType | undefined;
+  if (!merchantType) throw new MerchantTypeMissingError();
+
+  return await db.$transaction(async (tx) => {
+    let application = await tx.kycApplication.findUnique({ where: { merchantProfileId } });
+    if (!application) throw new ApplicationNotFoundError();
+
+    // Acquire parent-row lock
+    application = await tx.kycApplication.update({
+      where: { id: application.id },
+      data: { updatedAt: new Date() }
+    });
+
+    if (application.status === "UNDER_REVIEW" || application.status === "APPROVED") {
+      throw new KycStateError(`Cannot submit application in ${application.status} state.`);
+    }
+    if (application.status === "REJECTED" && !application.allowResubmission) {
+      throw new KycStateError("Resubmission is not allowed for this application.");
+    }
+    if (!application.formVersionId) throw new FormNotFoundError();
+
+    const fields = await tx.kycFieldDefinition.findMany({
+      where: { formVersionId: application.formVersionId }
+    });
+
+    // Filter by applicableTypes
+    const applicableFields = fields.filter(f => f.applicableTypes.length === 0 || f.applicableTypes.includes(merchantType));
+
+    const answers = await tx.kycAnswer.findMany({
+      where: { applicationId: application.id }
+    });
+
+    const documents = await tx.kycDocument.findMany({
+      where: { applicationId: application.id, status: "UPLOADED" }
+    });
+
+    const answerMap = new Map(answers.map(a => [a.fieldDefinitionId, a.value]));
+    const docMap = new Map<string, number>();
+    documents.forEach(d => {
+      docMap.set(d.fieldDefinitionId, (docMap.get(d.fieldDefinitionId) || 0) + 1);
+    });
+
+    const errors: { fieldKey: string, message: string }[] = [];
+
+    for (const field of applicableFields) {
+      let isInactive = false;
+      if (field.validationRules) {
+        try {
+          const rule = field.validationRules as any;
+          if (rule.type === "REQUIRED_IF_EQUALS" && rule.targetFieldKey && rule.targetValue !== undefined) {
+            const targetField = applicableFields.find(f => f.key === rule.targetFieldKey);
+            if (!targetField) {
+              isInactive = true;
+            } else {
+              const targetAnswerValue = answerMap.get(targetField.id);
+              if (targetAnswerValue !== rule.targetValue) {
+                isInactive = true;
+              }
+            }
+          } else {
+             errors.push({ fieldKey: field.key, message: "Invalid validation rule configuration." });
+             continue;
+          }
+        } catch (e) {
+          errors.push({ fieldKey: field.key, message: "Invalid validation rule configuration." });
+          continue;
+        }
+      }
+
+      if (isInactive) continue;
+
+      if (field.isRequired) {
+        if (field.dataType === "FILE") {
+          const docCount = docMap.get(field.id) || 0;
+          if (docCount < 1) {
+            errors.push({ fieldKey: field.key, message: "File upload is required." });
+          }
+        } else {
+          const value = answerMap.get(field.id);
+          if (value === undefined || value === null || value === "") {
+            errors.push({ fieldKey: field.key, message: "Answer is required." });
+            continue;
+          }
+          if (typeof value === "string" && value.trim() === "") {
+             errors.push({ fieldKey: field.key, message: "Answer is required." });
+             continue;
+          }
+
+          try {
+            validateFieldValue(field, value);
+          } catch (e: any) {
+            errors.push({ fieldKey: field.key, message: e.message || "Invalid answer." });
+          }
+        }
+      } else {
+        if (field.dataType !== "FILE") {
+           const value = answerMap.get(field.id);
+           if (value !== undefined && value !== null && value !== "") {
+              if (typeof value === "string") {
+                 if (value.trim() !== "") {
+                    try {
+                      validateFieldValue(field, value);
+                    } catch (e: any) {
+                      errors.push({ fieldKey: field.key, message: e.message || "Invalid answer." });
+                    }
+                 }
+              } else {
+                 try {
+                   validateFieldValue(field, value);
+                 } catch (e: any) {
+                   errors.push({ fieldKey: field.key, message: e.message || "Invalid answer." });
+                 }
+              }
+           }
+        }
+      }
+    }
+
+    if (errors.length > 0) {
+      throw new KycCompletenessError(errors);
+    }
+
+    const previousStatus = application.status;
+
+    const updatedApp = await tx.kycApplication.update({
+      where: { id: application.id },
+      data: {
+        status: "UNDER_REVIEW",
+        submittedAt: new Date()
+      }
+    });
+
+    await logAction({
+      actorType: AuditActorType.MERCHANT,
+      actorId: merchantProfileId,
+      entityType: AuditEntity.KYC_APPLICATION,
+      entityId: application.id,
+      action: AuditAction.UPDATE,
+      metadata: {
+        action: "SUBMIT_KYC",
+        previousStatus,
+        newStatus: "UNDER_REVIEW"
+      }
+    }, tx);
+
+    return updatedApp;
+  });
 }
