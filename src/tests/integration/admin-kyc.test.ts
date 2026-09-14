@@ -174,7 +174,7 @@ describe("Admin KYC Workflow (Phase C5)", () => {
         data: {
           id: "doc-1",
           applicationId: app.id,
-          fieldDefinitionId: "field-" + (typeof app !== "undefined" ? app.merchantProfileId : typeof app1 !== "undefined" ? app1.merchantProfileId : "error"),
+          fieldDefinitionId: "field-" + app.merchantProfileId,
           storageKey: "SECRET_KEY_123",
           originalFilename: "test.pdf",
           mimeType: "application/pdf",
@@ -211,7 +211,7 @@ describe("Admin KYC Workflow (Phase C5)", () => {
         data: {
           id: "doc-2",
           applicationId: app.id,
-          fieldDefinitionId: "field-" + (typeof app !== "undefined" ? app.merchantProfileId : typeof app1 !== "undefined" ? app1.merchantProfileId : "error"),
+          fieldDefinitionId: "field-" + app.merchantProfileId,
           storageKey: "SECRET_KEY_" + Math.random(),
           originalFilename: "real.pdf",
           mimeType: "application/pdf",
@@ -235,7 +235,7 @@ describe("Admin KYC Workflow (Phase C5)", () => {
         data: {
           id: "doc-3",
           applicationId: app1.id, // belongs to app1
-          fieldDefinitionId: "field-" + (typeof app !== "undefined" ? app.merchantProfileId : typeof app1 !== "undefined" ? app1.merchantProfileId : "error"),
+          fieldDefinitionId: "field-" + app1.merchantProfileId,
           storageKey: "SECRET_KEY_" + Math.random(),
           originalFilename: "real.pdf",
           mimeType: "application/pdf",
@@ -256,7 +256,7 @@ describe("Admin KYC Workflow (Phase C5)", () => {
         data: {
           id: "doc-4",
           applicationId: app.id,
-          fieldDefinitionId: "field-" + (typeof app !== "undefined" ? app.merchantProfileId : typeof app1 !== "undefined" ? app1.merchantProfileId : "error"),
+          fieldDefinitionId: "field-" + app.merchantProfileId,
           storageKey: "SECRET_KEY_" + Math.random(),
           originalFilename: "real.pdf",
           mimeType: "application/pdf",
