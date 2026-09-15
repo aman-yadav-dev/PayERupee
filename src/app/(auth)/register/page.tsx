@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Building2, Mail, MapPin, Phone, UserRound } from "lucide-react";
+import { Mail, Phone, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import {
   AuthDivider,
@@ -14,29 +14,25 @@ import {
   LogoBlock,
   PasswordField,
   SubmitButton,
-  TextareaField,
   fieldFade,
   stagger,
 } from "@/components/auth/AuthShell";
 import { CustomCheckbox } from "@/components/ui/checkbox";
 import { registerMerchantAction } from "@/actions/auth/register";
+import { getAuthDestinationAction } from "@/actions/auth/destination";
 
 interface RegisterFormData {
   fullName: string;
-  businessName: string;
   email: string;
   phone: string;
-  address: string;
   password: string;
   confirmPassword: string;
 }
 
 interface RegisterErrors {
   fullName?: string;
-  businessName?: string;
   email?: string;
   phone?: string;
-  address?: string;
   password?: string;
   confirmPassword?: string;
   terms?: string;
@@ -48,10 +44,8 @@ export default function RegisterPage() {
 
   const [formData, setFormData] = useState<RegisterFormData>({
     fullName: "",
-    businessName: "",
     email: "",
     phone: "",
-    address: "",
     password: "",
     confirmPassword: "",
   });
@@ -69,12 +63,6 @@ export default function RegisterPage() {
       e.fullName = "Full name must be at least 2 characters";
     }
 
-    if (!formData.businessName.trim()) {
-      e.businessName = "Company name is required";
-    } else if (formData.businessName.trim().length < 2) {
-      e.businessName = "Company name must be at least 2 characters";
-    }
-
     if (!formData.email.trim()) {
       e.email = "Email is required";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
@@ -87,26 +75,26 @@ export default function RegisterPage() {
       e.phone = "Phone number must be at least 10 digits";
     }
 
-    if (!formData.address.trim()) {
-      e.address = "Address is required";
-    } else if (formData.address.trim().length < 5) {
-      e.address = "Address must be at least 5 characters";
-    }
-
     if (!formData.password) {
       e.password = "Password is required";
     } else if (formData.password.length < 8) {
       e.password = "Password must be at least 8 characters";
+    } else if (!/[A-Z]/.test(formData.password)) {
+      e.password = "Password must contain at least one uppercase letter";
+    } else if (!/[a-z]/.test(formData.password)) {
+      e.password = "Password must contain at least one lowercase letter";
+    } else if (!/[0-9]/.test(formData.password)) {
+      e.password = "Password must contain at least one number";
+    } else if (!/[^A-Za-z0-9]/.test(formData.password)) {
+      e.password = "Password must contain at least one special character";
     }
 
-    if (!formData.confirmPassword) {
-      e.confirmPassword = "Please confirm your password";
-    } else if (formData.password !== formData.confirmPassword) {
+    if (formData.password !== formData.confirmPassword) {
       e.confirmPassword = "Passwords do not match";
     }
 
     if (!agreed) {
-      e.terms = "You must accept the Terms of Service and Privacy Policy to continue";
+      e.terms = "You must agree to the Terms of Service & Privacy Policy";
     }
 
     return e;
@@ -114,9 +102,10 @@ export default function RegisterPage() {
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const errs = validate();
-    if (Object.keys(errs).length > 0) {
-      setErrors(errs);
+    const validationErrors = validate();
+
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
       setShakeKey((k) => k + 1);
       return;
     }
@@ -127,18 +116,20 @@ export default function RegisterPage() {
       try {
         const res = await registerMerchantAction({
           name: formData.fullName.trim(),
-          businessName: formData.businessName.trim(),
           email: formData.email.trim().toLowerCase(),
           phone: formData.phone.trim(),
-          address: formData.address.trim(),
           password: formData.password,
           termsAccepted: agreed,
         });
 
         if (res.success) {
           toast.success("Merchant account created successfully!");
-          router.push("/pending-approval");
-          router.refresh();
+          const destRes = await getAuthDestinationAction();
+          if (destRes.success && destRes.data?.destination) {
+            router.push(destRes.data.destination);
+          } else {
+            router.push("/kyc/start");
+          }
         } else {
           toast.error(res.message || "Failed to create account");
           setShakeKey((k) => k + 1);
@@ -146,10 +137,8 @@ export default function RegisterPage() {
             const fieldErrors: RegisterErrors = {};
             const apiErrors = res.errors as Record<string, string[]>;
             if (apiErrors.name?.[0]) fieldErrors.fullName = apiErrors.name[0];
-            if (apiErrors.businessName?.[0]) fieldErrors.businessName = apiErrors.businessName[0];
             if (apiErrors.email?.[0]) fieldErrors.email = apiErrors.email[0];
             if (apiErrors.phone?.[0]) fieldErrors.phone = apiErrors.phone[0];
-            if (apiErrors.address?.[0]) fieldErrors.address = apiErrors.address[0];
             if (apiErrors.password?.[0]) fieldErrors.password = apiErrors.password[0];
             if (apiErrors.termsAccepted?.[0]) fieldErrors.terms = apiErrors.termsAccepted[0];
             setErrors(fieldErrors);
@@ -186,12 +175,10 @@ export default function RegisterPage() {
           animate="animate"
           className="w-full max-w-[420px] pb-12"
         >
-          {/* Logo */}
           <motion.div variants={fieldFade} className="mb-6 flex justify-center">
             <LogoBlock />
           </motion.div>
 
-          {/* Heading */}
           <motion.div variants={fieldFade} className="mb-6 text-center">
             <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.04em] text-zinc-900">
               Create merchant account
@@ -201,7 +188,6 @@ export default function RegisterPage() {
             </p>
           </motion.div>
 
-          {/* Form */}
           <AnimatePresence mode="wait">
             <form
               key={shakeKey}
@@ -218,16 +204,6 @@ export default function RegisterPage() {
                 value={formData.fullName}
                 onChange={setField("fullName")}
                 error={errors.fullName}
-              />
-              <InputField
-                label="Company Name"
-                icon={Building2}
-                autoComplete="organization"
-                placeholder="Acme Technologies Pvt Ltd"
-                name="businessName"
-                value={formData.businessName}
-                onChange={setField("businessName")}
-                error={errors.businessName}
               />
               <InputField
                 label="Email"
@@ -250,16 +226,6 @@ export default function RegisterPage() {
                 value={formData.phone}
                 onChange={setField("phone")}
                 error={errors.phone}
-              />
-              <TextareaField
-                label="Address"
-                icon={MapPin}
-                autoComplete="street-address"
-                placeholder="Plot 42, Cyber City, Gurugram, Haryana - 122002"
-                name="address"
-                value={formData.address}
-                onChange={setField("address")}
-                error={errors.address}
               />
               <PasswordField
                 label="Password"
@@ -284,7 +250,6 @@ export default function RegisterPage() {
                 error={errors.confirmPassword}
               />
 
-              {/* Terms & conditions */}
               <motion.div variants={fieldFade} className="pt-1">
                 <CustomCheckbox
                   checked={agreed}
@@ -336,7 +301,7 @@ export default function RegisterPage() {
               href="/login"
               className="font-semibold text-indigo-600 transition-colors hover:text-indigo-700"
             >
-              Sign in →
+              Sign in &rarr;
             </Link>
           </motion.p>
         </motion.div>

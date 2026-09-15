@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { db } from "@/infrastructure/database/db";
 import { NextRequest } from "next/server";
+import { POST as suspendMerchant } from "@/app/api/v1/admin/merchants/[id]/suspend/route";
 import { POST as approveMerchant } from "@/app/api/v1/admin/merchants/[id]/approve/route";
 import { AccountStatus } from "@prisma/client";
 
@@ -78,7 +79,7 @@ describe("Admin Merchant Account Approval API", () => {
     const req = createMockRequest(null);
     const { mId } = await createMerchant(AccountStatus.PENDING);
     
-    const res = await approveMerchant(req, { params: { id: mId } });
+    const res = await approveMerchant(req, { params: Promise.resolve({ id: mId }) as any });
     expect(res.status).toBe(401);
   });
 
@@ -86,14 +87,14 @@ describe("Admin Merchant Account Approval API", () => {
     const { mId, uId } = await createMerchant(AccountStatus.PENDING);
     const req = createMockRequest(uId);
     
-    const res = await approveMerchant(req, { params: { id: mId } });
+    const res = await approveMerchant(req, { params: Promise.resolve({ id: mId }) as any });
     expect(res.status).toBe(403);
   });
 
   it("returns 404 when ADMIN attempts to approve nonexistent merchant", async () => {
     const req = createMockRequest(adminUserId);
     
-    const res = await approveMerchant(req, { params: { id: "non-existent-id" } });
+    const res = await approveMerchant(req, { params: Promise.resolve({ id: "non-existent-id" }) as any });
     expect(res.status).toBe(404);
   });
 
@@ -101,7 +102,7 @@ describe("Admin Merchant Account Approval API", () => {
     const req = createMockRequest(adminUserId);
     const { mId } = await createMerchant(AccountStatus.ACTIVE);
     
-    const res = await approveMerchant(req, { params: { id: mId } });
+    const res = await approveMerchant(req, { params: Promise.resolve({ id: mId }) as any });
     expect(res.status).toBe(409);
   });
 
@@ -109,7 +110,7 @@ describe("Admin Merchant Account Approval API", () => {
     const req = createMockRequest(adminUserId);
     const { mId } = await createMerchant(AccountStatus.SUSPENDED);
     
-    const res = await approveMerchant(req, { params: { id: mId } });
+    const res = await approveMerchant(req, { params: Promise.resolve({ id: mId }) as any });
     expect(res.status).toBe(409);
   });
 
@@ -117,7 +118,7 @@ describe("Admin Merchant Account Approval API", () => {
     const req = createMockRequest(adminUserId);
     const { mId } = await createMerchant(AccountStatus.DELETED);
     
-    const res = await approveMerchant(req, { params: { id: mId } });
+    const res = await approveMerchant(req, { params: Promise.resolve({ id: mId }) as any });
     expect(res.status).toBe(409);
   });
 
@@ -125,7 +126,7 @@ describe("Admin Merchant Account Approval API", () => {
     const req = createMockRequest(adminUserId);
     const { mId } = await createMerchant(AccountStatus.PENDING);
     
-    const res = await approveMerchant(req, { params: { id: mId } });
+    const res = await approveMerchant(req, { params: Promise.resolve({ id: mId }) as any });
     expect(res.status).toBe(200);
 
     const data = await res.json();
@@ -152,7 +153,7 @@ describe("Admin Merchant Account Approval API", () => {
     // 1. Approve merchant
     const req = createMockRequest(adminUserId);
     const { mId, uId } = await createMerchant(AccountStatus.PENDING);
-    await approveMerchant(req, { params: { id: mId } });
+    await approveMerchant(req, { params: Promise.resolve({ id: mId }) as any });
 
     // 2. Attempt to hit a Phase 2A endpoint (e.g. Wallet GET) as that merchant
     const { GET: getWallet } = await import("@/app/api/v1/merchant/wallet/route");
@@ -165,5 +166,71 @@ describe("Admin Merchant Account Approval API", () => {
     
     const body = await res.json();
     expect(body.error).toContain("Merchant KYC is not approved");
+  });
+});
+
+
+describe("Admin Merchant Account Suspension API", () => {
+  const adminUserId = "test-admin-user";
+  
+  function createSuspendRequest(userId: string | null) {
+    if (userId) {
+      (auth.api.getSession as any).mockResolvedValue({ user: { id: userId } });
+    } else {
+      (auth.api.getSession as any).mockResolvedValue(null);
+    }
+    return new NextRequest("http://localhost:3000/api/v1/admin/merchants/test/suspend", { method: "POST" });
+  }
+
+  it("suspends merchant, creates audit log, and revokes sessions", async () => {
+    // 1. Create ACTIVE merchant
+    const mId = "suspend-test-m1";
+    const uId = "suspend-test-u1";
+    await db.user.create({ data: { id: uId, email: "susp@test.com", name: "M", role: "MERCHANT" } });
+    await db.merchantProfile.create({
+      data: { id: mId, userId: uId, businessName: "Susp M", accountStatus: AccountStatus.ACTIVE }
+    });
+
+    // 2. Create dummy session for the merchant
+    await db.session.create({
+      data: {
+        id: "dummy-session",
+        userId: uId,
+        token: "dummy-token",
+        expiresAt: new Date(Date.now() + 100000)
+      }
+    });
+
+    // 3. Suspend
+    const req = createSuspendRequest(adminUserId);
+    const res = await suspendMerchant(req, { params: Promise.resolve({ id: mId }) as any });
+    expect(res.status).toBe(200);
+
+    // 4. Verify DB
+    const profile = await db.merchantProfile.findUnique({ where: { id: mId } });
+    expect(profile?.accountStatus).toBe(AccountStatus.SUSPENDED);
+
+    const sessions = await db.session.findMany({ where: { userId: uId } });
+    expect(sessions.length).toBe(0); // session is revoked!
+
+    const logs = await db.auditLog.findMany({ where: { entityId: mId, action: "SUSPEND" } });
+    expect(logs.length).toBe(1);
+  });
+
+  it("fails to suspend a DELETED merchant", async () => {
+    const mId = "suspend-del-m1";
+    const uId = "suspend-del-u1";
+    await db.user.create({ data: { id: uId, email: "sdel@test.com", name: "M", role: "MERCHANT" } });
+    await db.merchantProfile.create({
+      data: { id: mId, userId: uId, businessName: "Del M", accountStatus: AccountStatus.DELETED }
+    });
+
+    const req = createSuspendRequest(adminUserId);
+    const res = await suspendMerchant(req, { params: Promise.resolve({ id: mId }) as any });
+    
+    // Check if it fails
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toContain("Cannot suspend a deleted account");
   });
 });

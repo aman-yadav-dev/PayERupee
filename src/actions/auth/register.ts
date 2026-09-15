@@ -30,7 +30,7 @@ export async function registerMerchantAction(
       );
     }
 
-    const { email, password, name, businessName, address, phone } = parsed.data;
+    const { email, password, name, phone } = parsed.data;
 
     // 2. Create Authentication Identity
     const authResponse = await auth.api.signUpEmail({
@@ -68,9 +68,7 @@ export async function registerMerchantAction(
     // 4. Initialize Merchant Data atomically
     await onboardMerchant({
       userId,
-      businessName,
       phone,
-      address,
     });
 
     return successResponse(

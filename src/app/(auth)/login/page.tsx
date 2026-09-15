@@ -18,7 +18,8 @@ import {
   stagger,
 } from "@/components/auth/AuthShell";
 import { CustomCheckbox } from "@/components/ui/checkbox";
-import { loginAction } from "@/actions/auth/login";
+import { authClient } from "@/modules/auth/infrastructure/auth-client";
+import { getAuthDestinationAction } from "@/actions/auth/destination";
 
 interface LoginFormData {
   email: string;
@@ -71,25 +72,22 @@ export default function LoginPage() {
 
     startTransition(async () => {
       try {
-        const res = await loginAction({
+        const res = await authClient.signIn.email({
           email: formData.email,
           password: formData.password,
         });
 
-        if (res.success) {
-          toast.success("Welcome back! Redirecting to dashboard...");
-          router.push("/dashboard");
-          router.refresh();
-        } else {
-          toast.error(res.message || "Failed to sign in");
-          setShakeKey((k) => k + 1);
-          if (res.errors && typeof res.errors === "object") {
-            const fieldErrors: LoginErrors = {};
-            const apiErrors = res.errors as Record<string, string[]>;
-            if (apiErrors.email?.[0]) fieldErrors.email = apiErrors.email[0];
-            if (apiErrors.password?.[0]) fieldErrors.password = apiErrors.password[0];
-            setErrors(fieldErrors);
+        if (!res.error) {
+          toast.success("Welcome back! Redirecting...");
+          const destRes = await getAuthDestinationAction();
+          if (destRes.success && destRes.data?.destination) {
+            router.push(destRes.data.destination);
+          } else {
+            router.push("/pending-approval");
           }
+        } else {
+          toast.error(res.error.message || "Failed to sign in");
+          setShakeKey((k) => k + 1);
         }
       } catch (err: unknown) {
         const errorMsg = err instanceof Error ? err.message : "Something went wrong";

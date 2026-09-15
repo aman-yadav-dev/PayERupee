@@ -68,3 +68,65 @@ export async function approveMerchantAccount(adminUserId: string, merchantProfil
     };
   });
 }
+
+
+/**
+ * Suspends a merchant account, transitioning it to SUSPENDED.
+ * Revokes all active browser sessions transactionally.
+ * Records the action in the audit log atomically.
+ */
+export async function suspendMerchantAccount(adminUserId: string, merchantProfileId: string) {
+  return await db.$transaction(async (tx) => {
+    const profile = await tx.merchantProfile.findUnique({
+      where: { id: merchantProfileId },
+      select: { id: true, accountStatus: true, userId: true }
+    });
+
+    if (!profile) {
+      throw new AdminMerchantNotFoundError();
+    }
+
+    if (profile.accountStatus === AccountStatus.SUSPENDED) {
+      return { success: true, merchantProfileId, accountStatus: AccountStatus.SUSPENDED };
+    }
+
+    if (profile.accountStatus === AccountStatus.DELETED) {
+      throw new AdminMerchantStateConflictError("Cannot suspend a deleted account.");
+    }
+
+    const previousStatus = profile.accountStatus;
+
+    const result = await tx.merchantProfile.updateMany({
+      where: {
+        id: merchantProfileId,
+        accountStatus: { in: [AccountStatus.ACTIVE, AccountStatus.PENDING] }
+      },
+      data: {
+        accountStatus: AccountStatus.SUSPENDED
+      }
+    });
+
+    if (result.count === 0) {
+      throw new AdminMerchantStateConflictError("Merchant status changed concurrently before suspension could complete.");
+    }
+
+    await tx.session.deleteMany({
+      where: { userId: profile.userId }
+    });
+
+    await logAction({
+      actorType: AuditActorType.ADMIN,
+      actorId: adminUserId,
+      entityType: AuditEntity.MERCHANT_PROFILE,
+      entityId: merchantProfileId,
+      action: AuditAction.SUSPEND,
+      metadata: { previousStatus }
+    }, tx);
+
+    return { 
+      success: true, 
+      merchantProfileId, 
+      accountStatus: AccountStatus.SUSPENDED 
+    };
+  });
+}

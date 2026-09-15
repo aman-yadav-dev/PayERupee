@@ -14,16 +14,6 @@ export const registerSchema = z.object({
     .trim()
     .min(2, "Full name must be at least 2 characters")
     .max(100, "Full name is too long"),
-  businessName: z
-    .string()
-    .trim()
-    .min(2, "Company name must be at least 2 characters")
-    .max(150, "Company name is too long"),
-  address: z
-    .string()
-    .trim()
-    .min(5, "Address must be at least 5 characters")
-    .max(255, "Address is too long"),
   phone: z
     .string()
     .trim()
@@ -37,7 +27,11 @@ export const registerSchema = z.object({
   password: z
     .string()
     .min(8, "Password must be at least 8 characters")
-    .max(128, "Password is too long"),
+    .max(128, "Password is too long")
+    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+    .regex(/[0-9]/, "Password must contain at least one number")
+    .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character"),
   termsAccepted: z
     .boolean()
     .default(false)

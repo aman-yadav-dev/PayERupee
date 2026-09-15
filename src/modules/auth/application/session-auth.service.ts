@@ -124,3 +124,13 @@ export async function requireAdmin(req: NextRequest | Request) {
 
   return session;
 }
+
+/**
+ * Hard-revoke all browser sessions for a given user.
+ */
+export async function revokeAllUserSessions(userId: string, tx?: any) {
+  const dbClient = tx || db;
+  await dbClient.session.deleteMany({
+    where: { userId }
+  });
+}
