@@ -3,10 +3,10 @@ import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/modules/auth/
 import { downloadAdminKycDocument } from "@/modules/admin/application/admin-kyc.service";
 import { ApplicationNotFoundError, KycValidationError } from "@/modules/merchant/application/merchant-kyc.service";
 
-export async function GET(req: NextRequest, { params }: { params: { applicationId: string, documentId: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ applicationId: string, documentId: string }> }) {
   try {
     await requireAdmin(req);
-    const result = await downloadAdminKycDocument(params.applicationId, params.documentId);
+    const result = await downloadAdminKycDocument((await params).applicationId, (await params).documentId);
     
     const safeName = result.originalFilename.replace(/[\r\n`"]/g, "");
     const encodedName = encodeURIComponent(safeName);

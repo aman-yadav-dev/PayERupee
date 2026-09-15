@@ -184,7 +184,7 @@ describe("Admin KYC Workflow (Phase C5)", () => {
       });
 
       const req = new NextRequest("http://localhost/api/v1/admin/kyc/applications/" + app.id);
-      const res = await getDetail(req, { params: { applicationId: app.id } });
+      const res = await getDetail(req, { params: Promise.resolve({ applicationId: app.id }) as any });
       expect(res.status).toBe(200);
       
       const json = await res.json();
@@ -198,7 +198,7 @@ describe("Admin KYC Workflow (Phase C5)", () => {
     it("404 for missing application", async () => {
       mockAdminSession();
       const req = new NextRequest("http://localhost/api/v1/admin/kyc/applications/non-existent");
-      const res = await getDetail(req, { params: { applicationId: "non-existent" } });
+      const res = await getDetail(req, { params: Promise.resolve({ applicationId: "non-existent" }) as any });
       expect(res.status).toBe(404);
     });
   });
@@ -221,7 +221,7 @@ describe("Admin KYC Workflow (Phase C5)", () => {
       });
 
       const req = new NextRequest(`http://localhost/api/v1/admin/kyc/applications/${app.id}/documents/doc-2/download`);
-      const res = await downloadDoc(req, { params: { applicationId: app.id, documentId: "doc-2" } });
+      const res = await downloadDoc(req, { params: Promise.resolve({ applicationId: app.id, documentId: "doc-2" }) as any });
       expect(res.status).toBe(200);
       expect(res.headers.get("Content-Type")).toBe("application/pdf");
       expect(res.headers.get("Content-Disposition")).toContain("real.pdf");
@@ -245,7 +245,7 @@ describe("Admin KYC Workflow (Phase C5)", () => {
       });
 
       const req = new NextRequest(`http://localhost/api/v1/admin/kyc/applications/${app2.id}/documents/doc-3/download`);
-      const res = await downloadDoc(req, { params: { applicationId: app2.id, documentId: "doc-3" } });
+      const res = await downloadDoc(req, { params: Promise.resolve({ applicationId: app2.id, documentId: "doc-3" }) as any });
       expect(res.status).toBe(404); // must fail because doc-3 does not belong to app2
     });
     
@@ -266,7 +266,7 @@ describe("Admin KYC Workflow (Phase C5)", () => {
       });
 
       const req = new NextRequest(`http://localhost/api/v1/admin/kyc/applications/${app.id}/documents/doc-4/download`);
-      const res = await downloadDoc(req, { params: { applicationId: app.id, documentId: "doc-4" } });
+      const res = await downloadDoc(req, { params: Promise.resolve({ applicationId: app.id, documentId: "doc-4" }) as any });
       expect(res.status).toBe(400); 
     });
   });
@@ -277,7 +277,7 @@ describe("Admin KYC Workflow (Phase C5)", () => {
       const app = await createKycApp(KycStatus.UNDER_REVIEW);
 
       const req = new NextRequest(`http://localhost/api/v1/admin/kyc/applications/${app.id}/approve`, { method: "POST" });
-      const res = await approveApp(req, { params: { applicationId: app.id } });
+      const res = await approveApp(req, { params: Promise.resolve({ applicationId: app.id }) as any });
       expect(res.status).toBe(200);
 
       const updated = await db.kycApplication.findUnique({ where: { id: app.id } });
@@ -299,7 +299,7 @@ describe("Admin KYC Workflow (Phase C5)", () => {
       const app = await createKycApp(KycStatus.PENDING_SUBMISSION);
 
       const req = new NextRequest(`http://localhost/api/v1/admin/kyc/applications/${app.id}/approve`, { method: "POST" });
-      const res = await approveApp(req, { params: { applicationId: app.id } });
+      const res = await approveApp(req, { params: Promise.resolve({ applicationId: app.id }) as any });
       expect(res.status).toBe(409);
       
       const audits = await db.auditLog.count({ where: { entityId: app.id, action: "APPROVE" } });
@@ -319,7 +319,7 @@ describe("Admin KYC Workflow (Phase C5)", () => {
           allowResubmission: true
         })
       });
-      const res = await rejectApp(req, { params: { applicationId: app.id } });
+      const res = await rejectApp(req, { params: Promise.resolve({ applicationId: app.id }) as any });
       expect(res.status).toBe(200);
 
       const updated = await db.kycApplication.findUnique({ where: { id: app.id } });
@@ -344,7 +344,7 @@ describe("Admin KYC Workflow (Phase C5)", () => {
           allowResubmission: true
         })
       });
-      const res = await rejectApp(req, { params: { applicationId: app.id } });
+      const res = await rejectApp(req, { params: Promise.resolve({ applicationId: app.id }) as any });
       expect(res.status).toBe(400);
     });
   });
@@ -358,8 +358,8 @@ describe("Admin KYC Workflow (Phase C5)", () => {
       const req2 = new NextRequest(`http://localhost/api/v1/admin/kyc/applications/${app.id}/approve`, { method: "POST" });
 
       const [res1, res2] = await Promise.all([
-        approveApp(req1, { params: { applicationId: app.id } }),
-        approveApp(req2, { params: { applicationId: app.id } })
+        approveApp(req1, { params: Promise.resolve({ applicationId: app.id }) as any }),
+        approveApp(req2, { params: Promise.resolve({ applicationId: app.id }) as any })
       ]);
 
       const statuses = [res1.status, res2.status].sort();
@@ -380,8 +380,8 @@ describe("Admin KYC Workflow (Phase C5)", () => {
       });
 
       const [res1, res2] = await Promise.all([
-        approveApp(req1, { params: { applicationId: app.id } }),
-        rejectApp(req2, { params: { applicationId: app.id } })
+        approveApp(req1, { params: Promise.resolve({ applicationId: app.id }) as any }),
+        rejectApp(req2, { params: Promise.resolve({ applicationId: app.id }) as any })
       ]);
 
       const statuses = [res1.status, res2.status].sort();

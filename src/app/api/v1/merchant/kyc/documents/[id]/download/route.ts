@@ -8,11 +8,11 @@ import {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await requireMerchantContext(req);
-    const doc = await getKycDocumentForDownload(session.merchantProfileId, params.id);
+    const doc = await getKycDocumentForDownload(session.merchantProfileId, (await params).id);
     
     // Sanitize filename to prevent HTTP Response Splitting
     const safeName = doc.originalFilename.replace(/[\r\n`"]/g, "");

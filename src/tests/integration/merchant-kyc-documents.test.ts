@@ -110,12 +110,12 @@ describe("Phase C3: Merchant KYC Documents - Hardened Matrix", () => {
     });
     it("3. unauth download -> 401", async () => {
       vi.mocked(requireMerchantContext).mockRejectedValue(new Error("Unauthorized"));
-      const res = await downloadDoc(new NextRequest("http://localhost/api"), { params: { id: "1" }});
+      const res = await downloadDoc(new NextRequest("http://localhost/api"), { params: Promise.resolve({ id: "1" }) as any});
       expect(res.status).toBe(401);
     });
     it("4. unauth delete -> 401", async () => {
       vi.mocked(requireMerchantContext).mockRejectedValue(new Error("Unauthorized"));
-      const res = await deleteDoc(new NextRequest("http://localhost/api"), { params: { id: "1" }});
+      const res = await deleteDoc(new NextRequest("http://localhost/api"), { params: Promise.resolve({ id: "1" }) as any});
       expect(res.status).toBe(401);
     });
   });
@@ -136,7 +136,7 @@ describe("Phase C3: Merchant KYC Documents - Hardened Matrix", () => {
       const upData = await up.json();
       
       vi.mocked(requireMerchantContext).mockResolvedValue({ userId: mockUserIdA, merchantProfileId: mockMerchantIdA } as any);
-      const dl = await downloadDoc(new NextRequest("http://localhost/api"), { params: { id: upData.document.id }});
+      const dl = await downloadDoc(new NextRequest("http://localhost/api"), { params: Promise.resolve({ id: upData.document.id }) as any});
       expect(dl.status).toBe(404);
     });
     it("8. cross-merchant delete -> 404", async () => {
@@ -144,11 +144,11 @@ describe("Phase C3: Merchant KYC Documents - Hardened Matrix", () => {
       const up = await uploadDoc(createReq(fileFieldId1));
       const upData = await up.json();
       vi.mocked(requireMerchantContext).mockResolvedValue({ userId: mockUserIdA, merchantProfileId: mockMerchantIdA } as any);
-      const del = await deleteDoc(new NextRequest("http://localhost/api"), { params: { id: upData.document.id }});
+      const del = await deleteDoc(new NextRequest("http://localhost/api"), { params: Promise.resolve({ id: upData.document.id }) as any});
       expect(del.status).toBe(404);
     });
     it("9. guessed ID -> 404", async () => {
-      const res = await downloadDoc(new NextRequest("http://localhost/api"), { params: { id: "nonexistent-id" }});
+      const res = await downloadDoc(new NextRequest("http://localhost/api"), { params: Promise.resolve({ id: "nonexistent-id" }) as any});
       expect(res.status).toBe(404);
     });
   });
@@ -287,7 +287,7 @@ describe("Phase C3: Merchant KYC Documents - Hardened Matrix", () => {
       expect(listData.documents).toHaveLength(1);
       expect(listData.documents[0].storageKey).toBeUndefined();
 
-      const dl = await downloadDoc(new NextRequest("http://localhost/api"), { params: { id: upData.document.id }});
+      const dl = await downloadDoc(new NextRequest("http://localhost/api"), { params: Promise.resolve({ id: upData.document.id }) as any});
       expect(dl.status).toBe(200);
       expect(dl.headers.get("Content-Disposition")).toContain("attachment;");
     });
@@ -296,12 +296,12 @@ describe("Phase C3: Merchant KYC Documents - Hardened Matrix", () => {
       const up = await uploadDoc(createReq(fileFieldId1));
       const docId = (await up.json()).document.id;
 
-      const del1 = await deleteDoc(new NextRequest("http://localhost/api"), { params: { id: docId }});
+      const del1 = await deleteDoc(new NextRequest("http://localhost/api"), { params: Promise.resolve({ id: docId }) as any});
       expect(del1.status).toBe(200);
       const check = await db.kycDocument.findUnique({ where: { id: docId }});
       expect(check).toBeNull();
 
-      const del2 = await deleteDoc(new NextRequest("http://localhost/api"), { params: { id: docId }});
+      const del2 = await deleteDoc(new NextRequest("http://localhost/api"), { params: Promise.resolve({ id: docId }) as any});
       expect(del2.status).toBe(404);
     });
     
@@ -310,7 +310,7 @@ describe("Phase C3: Merchant KYC Documents - Hardened Matrix", () => {
       const docId = (await up.json()).document.id;
 
       const spy = vi.spyOn(LocalDiskStorageAdapter.prototype, "delete").mockRejectedValueOnce(new Error("Storage Delete Error"));
-      const del = await deleteDoc(new NextRequest("http://localhost/api"), { params: { id: docId }});
+      const del = await deleteDoc(new NextRequest("http://localhost/api"), { params: Promise.resolve({ id: docId }) as any});
       expect(del.status).toBe(500);
       const check = await db.kycDocument.findUnique({ where: { id: docId }});
       expect(check).toBeNull();

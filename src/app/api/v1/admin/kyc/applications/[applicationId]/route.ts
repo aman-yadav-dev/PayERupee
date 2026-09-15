@@ -3,10 +3,10 @@ import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/modules/auth/
 import { getKycApplicationDetail } from "@/modules/admin/application/admin-kyc.service";
 import { ApplicationNotFoundError } from "@/modules/merchant/application/merchant-kyc.service";
 
-export async function GET(req: NextRequest, { params }: { params: { applicationId: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ applicationId: string }> }) {
   try {
     await requireAdmin(req);
-    const result = await getKycApplicationDetail(params.applicationId);
+    const result = await getKycApplicationDetail((await params).applicationId);
     return NextResponse.json({ data: result }, { status: 200 });
   } catch (error) {
     if (error instanceof UnauthorizedError) return NextResponse.json({ error: error.message }, { status: 401 });

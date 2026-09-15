@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/modules/auth/application/session-auth.service";
 import { approveMerchantAccount, AdminMerchantNotFoundError, AdminMerchantStateConflictError } from "@/modules/admin/domain/admin-merchant.service";
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     // 1. Authenticate & strictly enforce ADMIN role
     const session = await requireAdmin(req);
 
     // 2. Execute approval transaction
-    const merchantId = params.id;
+    const merchantId = (await params).id;
     const result = await approveMerchantAccount(session.user.id, merchantId);
 
     // 3. Return success

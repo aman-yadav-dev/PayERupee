@@ -9,11 +9,11 @@ import {
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await requireMerchantContext(req);
-    await deleteKycDocument(session.merchantProfileId, params.id);
+    await deleteKycDocument(session.merchantProfileId, (await params).id);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     if (error instanceof ApplicationNotFoundError || error instanceof KycValidationError) {

@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireFullMerchantAccess, UnauthorizedError, ForbiddenError } from "@/modules/auth/application/session-auth.service";
 import { revokeApiKey, KeyNotFoundError } from "@/modules/auth/application/api-key.service";
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { merchantProfileId } = await requireFullMerchantAccess(req);
 
-    const result = await revokeApiKey(merchantProfileId, params.id);
+    const result = await revokeApiKey(merchantProfileId, (await params).id);
 
     return NextResponse.json(result, { status: 200 });
   } catch (error) {
@@ -20,7 +20,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       return NextResponse.json({ success: false, error: error.message }, { status: 404 });
     }
 
-    console.error(`[DELETE /api/v1/merchant/api-keys/${params.id}]`, error);
+    console.error(`[DELETE /api/v1/merchant/api-keys/${(await params).id}]`, error);
     return NextResponse.json(
       { success: false, error: "Internal Server Error" },
       { status: 500 }

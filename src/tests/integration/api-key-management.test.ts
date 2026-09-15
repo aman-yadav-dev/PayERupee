@@ -219,7 +219,7 @@ describe("Merchant API Key Management", () => {
 
       // Revoke
       const delReq = new NextRequest(`http://localhost/api/v1/merchant/api-keys/${keyId}`, { method: "DELETE" });
-      const delRes = await DELETE(delReq, { params: { id: keyId } });
+      const delRes = await DELETE(delReq, { params: Promise.resolve({ id: keyId }) as any });
       expect(delRes.status).toBe(200);
 
       const dbKey = await db.apiKey.findUnique({ where: { id: keyId } });
@@ -234,7 +234,7 @@ describe("Merchant API Key Management", () => {
       expect((audit!.metadata as any).status).toBe("REVOKED");
 
       // Idempotent retry
-      const delRes2 = await DELETE(delReq, { params: { id: keyId } });
+      const delRes2 = await DELETE(delReq, { params: Promise.resolve({ id: keyId }) as any });
       expect(delRes2.status).toBe(200);
       
       const dbKey2 = await db.apiKey.findUnique({ where: { id: keyId } });
@@ -254,7 +254,7 @@ describe("Merchant API Key Management", () => {
       // Merch 2 tries to revoke it
       mockSession(mockUserId2);
       const delReq = new NextRequest(`http://localhost/api/v1/merchant/api-keys/${keyId}`, { method: "DELETE" });
-      const delRes = await DELETE(delReq, { params: { id: keyId } });
+      const delRes = await DELETE(delReq, { params: Promise.resolve({ id: keyId }) as any });
       expect(delRes.status).toBe(404);
     });
   });

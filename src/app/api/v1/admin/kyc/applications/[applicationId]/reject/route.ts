@@ -3,11 +3,11 @@ import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/modules/auth/
 import { rejectKycApplication } from "@/modules/admin/application/admin-kyc.service";
 import { ApplicationNotFoundError, KycStateError, KycValidationError } from "@/modules/merchant/application/merchant-kyc.service";
 
-export async function POST(req: NextRequest, { params }: { params: { applicationId: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ applicationId: string }> }) {
   try {
     const session = await requireAdmin(req);
     const body = await req.json();
-    const result = await rejectKycApplication(session.user.id, params.applicationId, body.rejectionReason, body.allowResubmission);
+    const result = await rejectKycApplication(session.user.id, (await params).applicationId, body.rejectionReason, body.allowResubmission);
     return NextResponse.json({ success: true, data: result }, { status: 200 });
   } catch (error) {
     if (error instanceof UnauthorizedError) return NextResponse.json({ error: error.message }, { status: 401 });
