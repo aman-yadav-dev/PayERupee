@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Mail } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -103,102 +103,98 @@ export default function LoginPage() {
       if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }));
     };
 
+  const shouldReduceMotion = useReducedMotion();
+
   return (
-    <main className="flex min-h-[100dvh] flex-col bg-white lg:flex-row">
-      <FloatingFintechPanel />
+    <motion.div
+      variants={shouldReduceMotion ? {} : stagger}
+      initial="initial"
+      animate="animate"
+      className="w-full max-w-[400px]"
+    >
+      {/* Logo */}
+      <motion.div variants={shouldReduceMotion ? { initial: { opacity: 0 }, animate: { opacity: 1, transition: { duration: 0.2 } } } : fieldFade} className="mb-10 flex justify-start">
+        <LogoBlock />
+      </motion.div>
 
-      <section className="flex flex-1 min-h-[100dvh] items-center justify-center overflow-y-auto bg-white px-6 py-12 sm:px-10 lg:px-14">
-        <motion.div
-          variants={stagger}
-          initial="initial"
-          animate="animate"
-          className="w-full max-w-[400px]"
+      {/* Heading */}
+      <motion.div variants={shouldReduceMotion ? { initial: { opacity: 0 }, animate: { opacity: 1, transition: { duration: 0.2 } } } : fieldFade} className="mb-8 text-left">
+        <h1 className="text-[26px] font-semibold leading-tight tracking-tight text-foreground">
+          Welcome back
+        </h1>
+        <p className="mt-2 text-[13.5px] text-muted-foreground">
+          Sign in to your workspace
+        </p>
+      </motion.div>
+
+      {/* Form */}
+      <AnimatePresence mode="wait">
+        <form
+          key={shakeKey}
+          onSubmit={onSubmit}
+          noValidate
+          className="space-y-4"
         >
-          {/* Logo */}
-          <motion.div variants={fieldFade} className="mb-10 flex justify-center">
-            <LogoBlock />
-          </motion.div>
+          <InputField
+            label="Email"
+            icon={Mail}
+            type="email"
+            autoComplete="email"
+            placeholder="you@company.com"
+            name="email"
+            value={formData.email}
+            onChange={set("email")}
+            error={errors.email}
+          />
 
-          {/* Heading */}
-          <motion.div variants={fieldFade} className="mb-8 text-center">
-            <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.04em] text-zinc-900">
-              Welcome back
-            </h1>
-            <p className="mt-2 text-[13.5px] text-zinc-400">
-              Sign in to your workspace
-            </p>
-          </motion.div>
+          <PasswordField
+            visible={passwordVisible}
+            onToggle={() => setPasswordVisible((v) => !v)}
+            autoComplete="current-password"
+            placeholder="Enter your password"
+            name="password"
+            value={formData.password}
+            onChange={set("password")}
+            error={errors.password}
+          />
 
-          {/* Form */}
-          <AnimatePresence mode="wait">
-            <form
-              key={shakeKey}
-              onSubmit={onSubmit}
-              noValidate
-              className="space-y-4"
-            >
-              <InputField
-                label="Email"
-                icon={Mail}
-                type="email"
-                autoComplete="email"
-                placeholder="you@company.com"
-                name="email"
-                value={formData.email}
-                onChange={set("email")}
-                error={errors.email}
-              />
-
-              <PasswordField
-                visible={passwordVisible}
-                onToggle={() => setPasswordVisible((v) => !v)}
-                autoComplete="current-password"
-                placeholder="Enter your password"
-                name="password"
-                value={formData.password}
-                onChange={set("password")}
-                error={errors.password}
-              />
-
-              {/* Remember me + Forgot password */}
-              <motion.div
-                variants={fieldFade}
-                className="flex items-center justify-between pt-1"
-              >
-                <CustomCheckbox
-                  checked={remember}
-                  onChange={(e) => setRemember(e.target.checked)}
-                  label="Remember me"
-                />
-                <Link
-                  href="/forgot-password"
-                  className="text-[12.5px] font-medium text-indigo-600 transition-colors hover:text-indigo-700"
-                >
-                  Forgot password?
-                </Link>
-              </motion.div>
-
-              <SubmitButton loading={isPending}>Sign In</SubmitButton>
-            </form>
-          </AnimatePresence>
-
-          <AuthDivider />
-          <GoogleButton />
-
-          <motion.p
-            variants={fieldFade}
-            className="mt-8 text-center text-[13px] text-zinc-400"
+          {/* Remember me + Forgot password */}
+          <motion.div
+            variants={shouldReduceMotion ? { initial: { opacity: 0 }, animate: { opacity: 1, transition: { duration: 0.2 } } } : fieldFade}
+            className="flex items-center justify-between pt-1"
           >
-            No account yet?{" "}
+            <CustomCheckbox
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+              label="Remember me"
+            />
             <Link
-              href="/register"
-              className="font-semibold text-indigo-600 transition-colors hover:text-indigo-700"
+              href="/forgot-password"
+              className="text-[12.5px] font-medium text-primary transition-colors hover:text-primary/80"
             >
-              Create one →
+              Forgot password?
             </Link>
-          </motion.p>
-        </motion.div>
-      </section>
-    </main>
+          </motion.div>
+
+          <SubmitButton loading={isPending}>Sign In</SubmitButton>
+        </form>
+      </AnimatePresence>
+
+      <AuthDivider />
+      <GoogleButton />
+
+      <motion.p
+        variants={shouldReduceMotion ? { initial: { opacity: 0 }, animate: { opacity: 1, transition: { duration: 0.2 } } } : fieldFade}
+        className="mt-8 text-left text-[13px] text-muted-foreground"
+      >
+        No account yet?{" "}
+        <Link
+          href="/register"
+          className="font-semibold text-primary transition-colors hover:text-primary/80"
+        >
+          Create one →
+        </Link>
+      </motion.p>
+    </motion.div>
   );
 }

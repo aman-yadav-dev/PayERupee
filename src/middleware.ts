@@ -35,8 +35,14 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // 2. Continue the request and apply headers
-  return applySecurityHeaders(NextResponse.next());
+  // 2. Consume transient verification cookie for idempotency
+  let response = NextResponse.next();
+  if (pathname.startsWith('/verify-result') && request.cookies.has('payERupee_verification_fresh')) {
+    response.cookies.delete('payERupee_verification_fresh');
+  }
+
+  // 3. Continue the request and apply headers
+  return applySecurityHeaders(response);
 }
 
 export const config = {

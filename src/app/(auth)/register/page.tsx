@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Mail, Phone, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -20,6 +20,7 @@ import {
 import { CustomCheckbox } from "@/components/ui/checkbox";
 import { registerMerchantAction } from "@/actions/auth/register";
 import { getAuthDestinationAction } from "@/actions/auth/destination";
+import { authClient } from "@/modules/auth/infrastructure/auth-client";
 
 interface RegisterFormData {
   fullName: string;
@@ -54,6 +55,7 @@ export default function RegisterPage() {
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [errors, setErrors] = useState<RegisterErrors>({});
   const [shakeKey, setShakeKey] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   function validate(): RegisterErrors {
     const e: RegisterErrors = {};
@@ -71,8 +73,8 @@ export default function RegisterPage() {
 
     if (!formData.phone.trim()) {
       e.phone = "Phone number is required";
-    } else if (formData.phone.trim().length < 10) {
-      e.phone = "Phone number must be at least 10 digits";
+    } else if (!/^\d{10}$/.test(formData.phone.trim())) {
+      e.phone = "Please enter a valid 10-digit phone number";
     }
 
     if (!formData.password) {
@@ -102,6 +104,8 @@ export default function RegisterPage() {
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (isSubmitting || isPending) return;
+
     const validationErrors = validate();
 
     if (Object.keys(validationErrors).length > 0) {
@@ -111,6 +115,7 @@ export default function RegisterPage() {
     }
 
     setErrors({});
+    setIsSubmitting(true);
 
     startTransition(async () => {
       try {
@@ -119,11 +124,13 @@ export default function RegisterPage() {
           email: formData.email.trim().toLowerCase(),
           phone: formData.phone.trim(),
           password: formData.password,
+          confirmPassword: formData.confirmPassword,
           termsAccepted: agreed,
         });
 
         if (res.success) {
           toast.success("Merchant account created successfully!");
+
           const destRes = await getAuthDestinationAction();
           if (destRes.success && destRes.data?.destination) {
             router.push(destRes.data.destination);
@@ -143,11 +150,13 @@ export default function RegisterPage() {
             if (apiErrors.termsAccepted?.[0]) fieldErrors.terms = apiErrors.termsAccepted[0];
             setErrors(fieldErrors);
           }
+          setIsSubmitting(false);
         }
       } catch (err: unknown) {
         const errorMsg = err instanceof Error ? err.message : "Something went wrong";
         toast.error(errorMsg);
         setShakeKey((k) => k + 1);
+        setIsSubmitting(false);
       }
     });
   }
@@ -164,148 +173,144 @@ export default function RegisterPage() {
       }
     };
 
+  const shouldReduceMotion = useReducedMotion();
+
   return (
-    <main className="flex min-h-[100dvh] flex-col bg-white lg:flex-row">
-      <FloatingFintechPanel />
+    <motion.div
+      variants={shouldReduceMotion ? {} : stagger}
+      initial="initial"
+      animate="animate"
+      className="w-full max-w-[400px]"
+    >
+      <motion.div variants={shouldReduceMotion ? { initial: { opacity: 0 }, animate: { opacity: 1, transition: { duration: 0.2 } } } : fieldFade} className="mb-10 flex justify-start">
+        <LogoBlock />
+      </motion.div>
 
-      <section className="flex flex-1 min-h-[100dvh] justify-center overflow-y-auto bg-white px-6 py-8 sm:px-10 lg:items-start lg:px-14 lg:pt-10">
-        <motion.div
-          variants={stagger}
-          initial="initial"
-          animate="animate"
-          className="w-full max-w-[420px] pb-12"
+      <motion.div variants={shouldReduceMotion ? { initial: { opacity: 0 }, animate: { opacity: 1, transition: { duration: 0.2 } } } : fieldFade} className="mb-8 text-left">
+        <h1 className="text-[26px] font-semibold leading-tight tracking-tight text-foreground">
+          Create merchant account
+        </h1>
+        <p className="mt-2 text-[13.5px] text-muted-foreground">
+          Set up your business workspace & disbursal engine
+        </p>
+      </motion.div>
+
+      <AnimatePresence mode="wait">
+        <form
+          key={shakeKey}
+          onSubmit={onSubmit}
+          noValidate
+          className="space-y-4"
         >
-          <motion.div variants={fieldFade} className="mb-6 flex justify-center">
-            <LogoBlock />
+          <InputField
+            label="Full Name"
+            icon={UserRound}
+            autoComplete="name"
+            placeholder="Aarav Mehta"
+            name="fullName"
+            value={formData.fullName}
+            onChange={setField("fullName")}
+            error={errors.fullName}
+          />
+          <InputField
+            label="Email"
+            icon={Mail}
+            type="email"
+            autoComplete="email"
+            placeholder="you@company.com"
+            name="email"
+            value={formData.email}
+            onChange={setField("email")}
+            error={errors.email}
+          />
+          <InputField
+            label="Phone Number"
+            icon={Phone}
+            type="tel"
+            autoComplete="tel"
+            placeholder="+91 98765 43210"
+            name="phone"
+            value={formData.phone}
+            onChange={setField("phone")}
+            error={errors.phone}
+          />
+          <PasswordField
+            label="Password"
+            visible={passwordVisible}
+            onToggle={() => setPasswordVisible((v) => !v)}
+            autoComplete="new-password"
+            placeholder="Create a strong password"
+            name="password"
+            value={formData.password}
+            onChange={setField("password")}
+            error={errors.password}
+          />
+          <PasswordField
+            label="Confirm Password"
+            visible={confirmVisible}
+            onToggle={() => setConfirmVisible((v) => !v)}
+            autoComplete="new-password"
+            placeholder="Re-enter your password"
+            name="confirmPassword"
+            value={formData.confirmPassword}
+            onChange={setField("confirmPassword")}
+            error={errors.confirmPassword}
+          />
+
+          <motion.div variants={shouldReduceMotion ? { initial: { opacity: 0 }, animate: { opacity: 1, transition: { duration: 0.2 } } } : fieldFade} className="pt-1">
+            <CustomCheckbox
+              checked={agreed}
+              onChange={(e) => {
+                setAgreed(e.target.checked);
+                if (errors.terms)
+                  setErrors((prev) => ({ ...prev, terms: undefined }));
+              }}
+            >
+              I agree to the{" "}
+              <Link
+                href="/terms"
+                target="_blank"
+                className="font-medium text-primary transition-colors hover:text-primary/80 underline"
+              >
+                Terms of Service
+              </Link>{" "}
+              and{" "}
+              <Link
+                href="/privacy"
+                target="_blank"
+                className="font-medium text-primary transition-colors hover:text-primary/80 underline"
+              >
+                Privacy Policy
+              </Link>
+            </CustomCheckbox>
+            {errors.terms && (
+              <span className="mt-1 block text-[11.5px] text-destructive">
+                {errors.terms}
+              </span>
+            )}
           </motion.div>
 
-          <motion.div variants={fieldFade} className="mb-6 text-center">
-            <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.04em] text-zinc-900">
-              Create merchant account
-            </h1>
-            <p className="mt-2 text-[13.5px] text-zinc-400">
-              Set up your business workspace & disbursal engine
-            </p>
-          </motion.div>
+          <SubmitButton loading={isPending || isSubmitting}>
+            Create Merchant Account
+          </SubmitButton>
+        </form>
+      </AnimatePresence>
 
-          <AnimatePresence mode="wait">
-            <form
-              key={shakeKey}
-              onSubmit={onSubmit}
-              noValidate
-              className="space-y-3.5"
-            >
-              <InputField
-                label="Full Name"
-                icon={UserRound}
-                autoComplete="name"
-                placeholder="Aarav Mehta"
-                name="fullName"
-                value={formData.fullName}
-                onChange={setField("fullName")}
-                error={errors.fullName}
-              />
-              <InputField
-                label="Email"
-                icon={Mail}
-                type="email"
-                autoComplete="email"
-                placeholder="you@company.com"
-                name="email"
-                value={formData.email}
-                onChange={setField("email")}
-                error={errors.email}
-              />
-              <InputField
-                label="Phone Number"
-                icon={Phone}
-                type="tel"
-                autoComplete="tel"
-                placeholder="+91 98765 43210"
-                name="phone"
-                value={formData.phone}
-                onChange={setField("phone")}
-                error={errors.phone}
-              />
-              <PasswordField
-                label="Password"
-                visible={passwordVisible}
-                onToggle={() => setPasswordVisible((v) => !v)}
-                autoComplete="new-password"
-                placeholder="Create a strong password"
-                name="password"
-                value={formData.password}
-                onChange={setField("password")}
-                error={errors.password}
-              />
-              <PasswordField
-                label="Confirm Password"
-                visible={confirmVisible}
-                onToggle={() => setConfirmVisible((v) => !v)}
-                autoComplete="new-password"
-                placeholder="Re-enter your password"
-                name="confirmPassword"
-                value={formData.confirmPassword}
-                onChange={setField("confirmPassword")}
-                error={errors.confirmPassword}
-              />
+      <AuthDivider />
+      <GoogleButton />
 
-              <motion.div variants={fieldFade} className="pt-1">
-                <CustomCheckbox
-                  checked={agreed}
-                  onChange={(e) => {
-                    setAgreed(e.target.checked);
-                    if (errors.terms)
-                      setErrors((prev) => ({ ...prev, terms: undefined }));
-                  }}
-                >
-                  I agree to the{" "}
-                  <Link
-                    href="/terms"
-                    target="_blank"
-                    className="font-medium text-indigo-600 transition-colors hover:text-indigo-700 underline"
-                  >
-                    Terms of Service
-                  </Link>{" "}
-                  and{" "}
-                  <Link
-                    href="/privacy"
-                    target="_blank"
-                    className="font-medium text-indigo-600 transition-colors hover:text-indigo-700 underline"
-                  >
-                    Privacy Policy
-                  </Link>
-                </CustomCheckbox>
-                {errors.terms && (
-                  <span className="mt-1 block text-[11.5px] text-red-500">
-                    {errors.terms}
-                  </span>
-                )}
-              </motion.div>
-
-              <SubmitButton loading={isPending}>
-                Create Merchant Account
-              </SubmitButton>
-            </form>
-          </AnimatePresence>
-
-          <AuthDivider />
-          <GoogleButton />
-
-          <motion.p
-            variants={fieldFade}
-            className="mt-8 text-center text-[13px] text-zinc-400"
-          >
-            Already have an account?{" "}
-            <Link
-              href="/login"
-              className="font-semibold text-indigo-600 transition-colors hover:text-indigo-700"
-            >
-              Sign in &rarr;
-            </Link>
-          </motion.p>
-        </motion.div>
-      </section>
-    </main>
+      <motion.p
+        variants={shouldReduceMotion ? { initial: { opacity: 0 }, animate: { opacity: 1, transition: { duration: 0.2 } } } : fieldFade}
+        className="mt-8 text-left text-[13px] text-muted-foreground"
+      >
+        Already have an account?{" "}
+        <Link
+          href="/login"
+          className="font-semibold text-primary transition-colors hover:text-primary/80"
+        >
+          Sign in &rarr;
+        </Link>
+      </motion.p>
+    </motion.div>
   );
 }

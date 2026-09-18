@@ -10,10 +10,10 @@ export default async function LoginLayout({
   
   if (destination === "/login?error=account_suspended") {
     return (
-      <div className="flex min-h-[100dvh] items-center justify-center bg-zinc-50 p-6">
-        <div className="rounded-2xl bg-white p-8 text-center shadow-sm max-w-md w-full border border-red-100">
-          <h1 className="text-xl font-bold text-red-600 mb-2">Account Suspended</h1>
-          <p className="text-sm text-zinc-600">Your merchant account is currently suspended or inactive. Please contact support for assistance.</p>
+      <div className="w-full max-w-[400px]">
+        <div className="rounded-2xl bg-card p-8 text-center shadow-sm w-full border border-destructive/20">
+          <h1 className="text-xl font-bold text-destructive mb-2">Account Suspended</h1>
+          <p className="text-sm text-muted-foreground">Your merchant account is currently suspended or inactive. Please contact support for assistance.</p>
         </div>
       </div>
     );

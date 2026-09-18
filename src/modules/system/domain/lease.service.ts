@@ -62,3 +62,28 @@ export async function releaseSystemLease(resource: string, owner: string): Promi
     }
   });
 }
+
+/**
+ * Unconditionally sets or extends a system lease (e.g. for user cooldowns).
+ */
+export async function setSystemLease(resource: string, owner: string, ttlSeconds: number): Promise<void> {
+  const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
+  await db.systemLease.upsert({
+    where: { resource },
+    update: { owner, expiresAt },
+    create: { resource, owner, expiresAt }
+  });
+}
+
+/**
+ * Retrieves an active system lease. Returns null if missing or expired.
+ */
+export async function getActiveSystemLease(resource: string) {
+  const lease = await db.systemLease.findUnique({
+    where: { resource }
+  });
+  if (!lease || lease.expiresAt < new Date()) {
+    return null;
+  }
+  return lease;
+}

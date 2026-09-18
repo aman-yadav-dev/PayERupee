@@ -2,11 +2,10 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { Mail, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  FloatingFintechPanel,
   InputField,
   LogoBlock,
   SubmitButton,
@@ -48,86 +47,82 @@ export default function ForgotPasswordPage() {
     });
   }
 
+  const shouldReduceMotion = useReducedMotion();
+
   return (
-    <main className="flex min-h-[100dvh] flex-col bg-white lg:flex-row">
-      <FloatingFintechPanel />
+    <motion.div
+      variants={shouldReduceMotion ? {} : stagger}
+      initial="initial"
+      animate="animate"
+      className="w-full max-w-[400px]"
+    >
+      {/* Logo */}
+      <motion.div variants={shouldReduceMotion ? { initial: { opacity: 0 }, animate: { opacity: 1, transition: { duration: 0.2 } } } : fieldFade} className="mb-10 flex justify-start">
+        <LogoBlock />
+      </motion.div>
 
-      <section className="flex flex-1 min-h-[100dvh] items-center justify-center overflow-y-auto bg-white px-6 py-12 sm:px-10 lg:px-14">
+      {/* Heading */}
+      <motion.div variants={shouldReduceMotion ? { initial: { opacity: 0 }, animate: { opacity: 1, transition: { duration: 0.2 } } } : fieldFade} className="mb-8 text-left">
+        <h1 className="text-[26px] font-semibold leading-tight tracking-tight text-foreground">
+          Reset Password
+        </h1>
+        <p className="mt-2 text-[13.5px] text-muted-foreground">
+          Enter your email address to receive recovery instructions
+        </p>
+      </motion.div>
+
+      {submitted ? (
         <motion.div
-          variants={stagger}
-          initial="initial"
-          animate="animate"
-          className="w-full max-w-[400px]"
+          variants={shouldReduceMotion ? { initial: { opacity: 0 }, animate: { opacity: 1, transition: { duration: 0.2 } } } : fieldFade}
+          className="rounded-2xl border border-border bg-card p-6 text-center space-y-4 shadow-sm"
         >
-          {/* Logo */}
-          <motion.div variants={fieldFade} className="mb-10 flex justify-center">
-            <LogoBlock />
-          </motion.div>
-
-          {/* Heading */}
-          <motion.div variants={fieldFade} className="mb-8 text-center">
-            <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.04em] text-zinc-900">
-              Reset Password
-            </h1>
-            <p className="mt-2 text-[13.5px] text-zinc-400">
-              Enter your email address to receive recovery instructions
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-500">
+            <CheckCircle2 className="h-6 w-6" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-foreground text-base">Check your inbox</h3>
+            <p className="mt-1 text-[13px] text-muted-foreground">
+              If an account exists for <strong className="text-foreground">{email}</strong>, we have sent instructions to reset your password.
             </p>
-          </motion.div>
-
-          {submitted ? (
-            <motion.div
-              variants={fieldFade}
-              className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-6 text-center space-y-4"
-            >
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-                <CheckCircle2 className="h-6 w-6" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-zinc-900 text-base">Check your inbox</h3>
-                <p className="mt-1 text-[13px] text-zinc-500">
-                  If an account exists for <strong className="text-zinc-800">{email}</strong>, we have sent instructions to reset your password.
-                </p>
-              </div>
-              <Link
-                href="/login"
-                className="inline-flex items-center justify-center gap-1.5 text-[13px] font-semibold text-indigo-600 hover:text-indigo-700 pt-2"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Back to Sign In
-              </Link>
-            </motion.div>
-          ) : (
-            <form onSubmit={onSubmit} noValidate className="space-y-4">
-              <InputField
-                label="Email"
-                icon={Mail}
-                type="email"
-                autoComplete="email"
-                placeholder="you@company.com"
-                name="email"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  if (error) setError(undefined);
-                }}
-                error={error}
-              />
-
-              <SubmitButton loading={isPending}>Send Reset Instructions</SubmitButton>
-
-              <div className="pt-4 text-center">
-                <Link
-                  href="/login"
-                  className="inline-flex items-center gap-1.5 text-[13px] font-medium text-zinc-500 hover:text-zinc-800 transition-colors"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  Back to Sign In
-                </Link>
-              </div>
-            </form>
-          )}
+          </div>
+          <Link
+            href="/login"
+            className="inline-flex items-center justify-center gap-1.5 text-[13px] font-semibold text-primary transition-colors hover:text-primary/80 pt-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Sign In
+          </Link>
         </motion.div>
-      </section>
-    </main>
+      ) : (
+        <motion.form variants={shouldReduceMotion ? { initial: { opacity: 0 }, animate: { opacity: 1, transition: { duration: 0.2 } } } : fieldFade} onSubmit={onSubmit} noValidate className="space-y-4">
+          <InputField
+            label="Email"
+            icon={Mail}
+            type="email"
+            autoComplete="email"
+            placeholder="you@company.com"
+            name="email"
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (error) setError(undefined);
+            }}
+            error={error}
+          />
+
+          <SubmitButton loading={isPending}>Send Reset Instructions</SubmitButton>
+
+          <div className="pt-4 text-left">
+            <Link
+              href="/login"
+              className="inline-flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Sign In
+            </Link>
+          </div>
+        </motion.form>
+      )}
+    </motion.div>
   );
 }

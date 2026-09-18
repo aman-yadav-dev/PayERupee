@@ -46,44 +46,48 @@ describe("Destination Service (AUTH-LIFE-1)", () => {
     expect(resolveAuthDestination(ctx)).toBe("/kyc/start");
   });
 
-  it("returns /pending-approval for PENDING accounts with PENDING_SUBMISSION kyc (fallback)", () => {
-    const ctx = buildContext({
-      profile: { 
-        accountStatus: "PENDING" as AccountStatus, 
-        kycApplication: { status: "PENDING_SUBMISSION" as KycStatus, allowResubmission: false }
+  it("returns /kyc/start for PENDING accounts with PENDING_SUBMISSION kyc (fallback)", () => {
+    const ctx: DestinationContext = {
+      session: { user: { id: "u1", emailVerified: true } },
+      profile: {
+        accountStatus: "PENDING",
+        kycApplication: { status: "PENDING_SUBMISSION", allowResubmission: true }
       },
-    });
-    expect(resolveAuthDestination(ctx)).toBe("/pending-approval");
+    };
+    expect(resolveAuthDestination(ctx)).toBe("/kyc/start");
   });
 
-  it("returns /pending-approval for PENDING accounts with UNDER_REVIEW kyc (fallback)", () => {
-    const ctx = buildContext({
-      profile: { 
-        accountStatus: "PENDING" as AccountStatus, 
-        kycApplication: { status: "UNDER_REVIEW" as KycStatus, allowResubmission: false }
+  it("returns /kyc/under-review for PENDING accounts with UNDER_REVIEW kyc (fallback)", () => {
+    const ctx: DestinationContext = {
+      session: { user: { id: "u1", emailVerified: true } },
+      profile: {
+        accountStatus: "PENDING",
+        kycApplication: { status: "UNDER_REVIEW", allowResubmission: true }
       },
-    });
-    expect(resolveAuthDestination(ctx)).toBe("/pending-approval");
+    };
+    expect(resolveAuthDestination(ctx)).toBe("/kyc/under-review");
   });
 
-  it("returns /pending-approval for PENDING accounts with REJECTED kyc (resubmission allowed fallback)", () => {
-    const ctx = buildContext({
-      profile: { 
-        accountStatus: "PENDING" as AccountStatus, 
-        kycApplication: { status: "REJECTED" as KycStatus, allowResubmission: true }
+  it("returns /kyc/rejected for PENDING accounts with REJECTED kyc (resubmission allowed fallback)", () => {
+    const ctx: DestinationContext = {
+      session: { user: { id: "u1", emailVerified: true } },
+      profile: {
+        accountStatus: "PENDING",
+        kycApplication: { status: "REJECTED", allowResubmission: true }
       },
-    });
-    expect(resolveAuthDestination(ctx)).toBe("/pending-approval");
+    };
+    expect(resolveAuthDestination(ctx)).toBe("/kyc/rejected");
   });
 
-  it("returns /pending-approval for PENDING accounts with REJECTED kyc (terminal fallback)", () => {
-    const ctx = buildContext({
-      profile: { 
-        accountStatus: "PENDING" as AccountStatus, 
-        kycApplication: { status: "REJECTED" as KycStatus, allowResubmission: false }
+  it("returns /kyc/rejected for PENDING accounts with REJECTED kyc (terminal fallback)", () => {
+    const ctx: DestinationContext = {
+      session: { user: { id: "u1", emailVerified: true } },
+      profile: {
+        accountStatus: "PENDING",
+        kycApplication: { status: "REJECTED", allowResubmission: false }
       },
-    });
-    expect(resolveAuthDestination(ctx)).toBe("/pending-approval");
+    };
+    expect(resolveAuthDestination(ctx)).toBe("/kyc/rejected");
   });
 
   it("returns /pending-approval for PENDING accounts with APPROVED kyc (awaiting admin)", () => {

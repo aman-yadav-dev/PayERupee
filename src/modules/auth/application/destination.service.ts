@@ -22,8 +22,11 @@ export interface DestinationContext {
 export type AuthDestination = 
   | "/login" 
   | "/login?error=account_suspended"
+  | "/verify-email"
   | "/onboarding"
   | "/kyc/start"
+  | "/kyc/under-review"
+  | "/kyc/rejected"
   | "/pending-approval"
   | "/dashboard";
 
@@ -39,8 +42,9 @@ export function resolveAuthDestination(ctx: DestinationContext): AuthDestination
     return "/login";
   }
 
-  // Future feature: Email Verification.
-  // if (!ctx.session.user.emailVerified) { return "/verify-email"; }
+  if (!ctx.session.user.emailVerified) {
+    return "/verify-email";
+  }
 
   if (!ctx.profile) {
     return "/onboarding";
@@ -57,13 +61,13 @@ export function resolveAuthDestination(ctx: DestinationContext): AuthDestination
       return "/kyc/start";
     }
     
-    // The following KYC states do not yet have dedicated routes (/kyc/form, /kyc/under-review, /kyc/rejected).
-    // They safely fallback to the existing /pending-approval holding route.
     switch (kycApplication.status) {
       case "PENDING_SUBMISSION":
+        return "/kyc/start";
       case "UNDER_REVIEW":
+        return "/kyc/under-review";
       case "REJECTED":
-        return "/pending-approval";
+        return "/kyc/rejected";
       case "APPROVED":
         // PENDING account but APPROVED KYC means it is awaiting Admin final approval.
         return "/pending-approval";

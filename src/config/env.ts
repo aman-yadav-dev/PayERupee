@@ -33,6 +33,14 @@ const envSchema = z.object({
 
   // Background Workers
   CRON_SECRET: z.string().optional(),
+
+  // Email Configuration (SMTP)
+  SMTP_ENABLED: z.enum(["true", "false", "1", "0"]).transform((val) => val === "true" || val === "1").optional(),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASSWORD: z.string().optional(),
+  MAIL_FROM: z.string().optional(),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

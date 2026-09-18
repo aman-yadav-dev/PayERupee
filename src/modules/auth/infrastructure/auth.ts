@@ -1,9 +1,11 @@
+import { cookies } from "next/headers";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { APIError } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import { db } from "@/infrastructure/database/db";
 import { env } from "@/config/env";
+import { EMAIL_VERIFICATION_EXPIRATION_SECONDS } from "@/infrastructure/notifications/mailer";
 
 export const auth = betterAuth({
   database: prismaAdapter(db, {
@@ -16,6 +18,34 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     autoSignIn: true,
+  },
+
+  emailVerification: {
+    sendOnSignUp: true,
+    autoSignInAfterVerification: true,
+    expiresIn: EMAIL_VERIFICATION_EXPIRATION_SECONDS,
+    sendVerificationEmail: async ({ user, url, token }) => {
+      const { sendVerificationEmail } = await import("@/infrastructure/notifications/mailer");
+      const { setSystemLease } = await import("@/modules/system/domain/lease.service");
+
+      const verifyUrl = new URL(url);
+      verifyUrl.searchParams.set("callbackURL", `${verifyUrl.origin}/verify-result?success=true`);
+
+      await sendVerificationEmail({ user: { id: user.id, email: user.email!, name: user.name }, url: verifyUrl.toString(), token });
+
+      // ONLY AFTER successful mailer completion, establish the cooldown lease
+      await setSystemLease(`email_verification_cooldown_${user.id}`, user.id, 30);
+    },
+    afterEmailVerification: async () => {
+      const cookieStore = await cookies();
+      cookieStore.set("payERupee_verification_fresh", "1", {
+        httpOnly: true,
+        secure: env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/verify-result",
+        maxAge: 15,
+      });
+    },
   },
 
   socialProviders: {
@@ -46,7 +76,7 @@ export const auth = betterAuth({
               throw APIError.from("UNAUTHORIZED", { code: "UNAUTHORIZED", message: "Account is suspended" });
             }
           }
-          
+
           return { data: session };
         },
       },

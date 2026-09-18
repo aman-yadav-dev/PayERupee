@@ -84,4 +84,34 @@ describe("Edge Middleware Security", () => {
       expect(res.headers.get("X-Frame-Options")).toBe("DENY");
     });
   });
+
+  describe("Transient Verification Cookie Consumption (/verify-result)", () => {
+    it("should delete payERupee_verification_fresh cookie if present on /verify-result", () => {
+      const req = createMockRequest("/verify-result");
+      req.cookies.set("payERupee_verification_fresh", "1");
+      const res = middleware(req);
+
+      const setCookieHeader = res.headers.get("set-cookie");
+      expect(setCookieHeader).toBeTruthy();
+      expect(setCookieHeader).toContain("payERupee_verification_fresh=;");
+      expect(setCookieHeader).toContain("Expires=Thu, 01 Jan 1970 00:00:00 GMT");
+    });
+
+    it("should NOT delete payERupee_verification_fresh cookie if NOT on /verify-result", () => {
+      const req = createMockRequest("/dashboard");
+      req.cookies.set("payERupee_verification_fresh", "1");
+      const res = middleware(req);
+
+      const setCookieHeader = res.headers.get("set-cookie");
+      expect(setCookieHeader).toBeNull();
+    });
+
+    it("should NOT throw or modify cookies if cookie is absent on /verify-result", () => {
+      const req = createMockRequest("/verify-result");
+      const res = middleware(req);
+
+      const setCookieHeader = res.headers.get("set-cookie");
+      expect(setCookieHeader).toBeNull();
+    });
+  });
 });

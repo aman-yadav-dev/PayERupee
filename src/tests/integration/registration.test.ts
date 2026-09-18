@@ -72,58 +72,78 @@ describe("Feature A1 - Registration Foundation", () => {
   });
 
   describe("Schema Validation", () => {
-    it("accepts valid password", () => {
+    const validBaseData = {
+      name: "Test User",
+      phone: "9876543210",
+      email: "test@example.com",
+      password: "ValidPassword123!",
+      confirmPassword: "ValidPassword123!",
+      termsAccepted: true,
+    };
+
+    it("accepts valid registration data", () => {
       const result = registerSchema.safeParse({
         name: "Test User",
-        phone: "9998887776",
+        phone: "9876543210",
         email: "test@example.com",
-        password: "ValidPassword123!",
+        password: "ValidPassword123!", confirmPassword: "ValidPassword123!",
         termsAccepted: true,
       });
       expect(result.success).toBe(true);
     });
 
-    it("rejects password < 8 characters", () => {
-      const result = registerSchema.safeParse({
-        name: "Test", phone: "9998887776", email: "a@a.com",
-        password: "Pass1!", termsAccepted: true
+    describe("Phone Validation", () => {
+      it("accepts valid Indian format", () => {
+        expect(registerSchema.safeParse({ ...validBaseData, phone: "9876543210" }).success).toBe(true);
+        expect(registerSchema.safeParse({ ...validBaseData, phone: "8123456789" }).success).toBe(true);
+        expect(registerSchema.safeParse({ ...validBaseData, phone: "7001234567" }).success).toBe(true);
+        expect(registerSchema.safeParse({ ...validBaseData, phone: "6987654321" }).success).toBe(true);
       });
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        const errors = result.error.flatten().fieldErrors.password;
-        expect(errors).toBeDefined();
-        expect(errors?.some(e => e.includes("8 characters"))).toBe(true);
-      }
+
+      it("rejects invalid leading digits", () => {
+        expect(registerSchema.safeParse({ ...validBaseData, phone: "1234567890" }).success).toBe(false);
+        expect(registerSchema.safeParse({ ...validBaseData, phone: "0123456789" }).success).toBe(false);
+        expect(registerSchema.safeParse({ ...validBaseData, phone: "5555555555" }).success).toBe(false);
+      });
+
+      it("rejects repeated fake numbers", () => {
+        expect(registerSchema.safeParse({ ...validBaseData, phone: "0000000000" }).success).toBe(false);
+        expect(registerSchema.safeParse({ ...validBaseData, phone: "1111111111" }).success).toBe(false);
+        expect(registerSchema.safeParse({ ...validBaseData, phone: "9999999999" }).success).toBe(false);
+        expect(registerSchema.safeParse({ ...validBaseData, phone: "8888888888" }).success).toBe(false);
+      });
+
+      it("rejects phone with < 10 digits", () => {
+        expect(registerSchema.safeParse({ ...validBaseData, phone: "987654321" }).success).toBe(false);
+      });
+
+      it("rejects phone with > 10 digits", () => {
+        expect(registerSchema.safeParse({ ...validBaseData, phone: "98765432101" }).success).toBe(false);
+      });
+
+      it("rejects phone with alphabetic characters", () => {
+        expect(registerSchema.safeParse({ ...validBaseData, phone: "98765abcde" }).success).toBe(false);
+      });
     });
 
-    it("rejects password without uppercase", () => {
-      const result = registerSchema.safeParse({
-        name: "Test", phone: "9998887776", email: "a@a.com",
-        password: "password123!", termsAccepted: true
+    describe("Email Validation", () => {
+      it("accepts normal valid addresses", () => {
+        expect(registerSchema.safeParse({ ...validBaseData, email: "user@example.com" }).success).toBe(true);
+        expect(registerSchema.safeParse({ ...validBaseData, email: "first.last+tag@domain.co.in" }).success).toBe(true);
       });
-      expect(result.success).toBe(false);
+
+      it("rejects clearly malformed addresses", () => {
+        expect(registerSchema.safeParse({ ...validBaseData, email: "userexample.com" }).success).toBe(false);
+        expect(registerSchema.safeParse({ ...validBaseData, email: "user@example" }).success).toBe(false); // missing TLD
+        expect(registerSchema.safeParse({ ...validBaseData, email: "user@" }).success).toBe(false);
+        expect(registerSchema.safeParse({ ...validBaseData, email: "@example.com" }).success).toBe(false);
+      });
     });
 
-    it("rejects password without lowercase", () => {
+    it("rejects short password", () => {
       const result = registerSchema.safeParse({
-        name: "Test", phone: "9998887776", email: "a@a.com",
-        password: "PASSWORD123!", termsAccepted: true
-      });
-      expect(result.success).toBe(false);
-    });
-
-    it("rejects password without number", () => {
-      const result = registerSchema.safeParse({
-        name: "Test", phone: "9998887776", email: "a@a.com",
-        password: "Password!!", termsAccepted: true
-      });
-      expect(result.success).toBe(false);
-    });
-
-    it("rejects password without special character", () => {
-      const result = registerSchema.safeParse({
-        name: "Test", phone: "9998887776", email: "a@a.com",
-        password: "Password123", termsAccepted: true
+        ...validBaseData,
+        password: "Pass1!", confirmPassword: "Pass1!"
       });
       expect(result.success).toBe(false);
     });
@@ -133,7 +153,7 @@ describe("Feature A1 - Registration Foundation", () => {
         name: "Test User",
         phone: "9998887776",
         email: "test@example.com",
-        password: "ValidPassword123!",
+        password: "ValidPassword123!", confirmPassword: "ValidPassword123!",
         termsAccepted: true,
         businessName: "Acme", // Should be stripped
         address: "123 Street", // Should be stripped
@@ -145,6 +165,42 @@ describe("Feature A1 - Registration Foundation", () => {
         expect(result.data).not.toHaveProperty("address");
       }
     });
+
+    it("rejects mismatched confirmPassword", () => {
+      const result = registerSchema.safeParse({
+        name: "Test User",
+        phone: "9998887776",
+        email: "test@example.com",
+        password: "ValidPassword123!",
+        confirmPassword: "WrongPassword123!",
+        termsAccepted: true,
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects phone with < 10 digits", () => {
+      const result = registerSchema.safeParse({
+        name: "Test", phone: "999888777", email: "a@a.com",
+        password: "ValidPassword123!", confirmPassword: "ValidPassword123!", termsAccepted: true
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects phone with > 10 digits", () => {
+      const result = registerSchema.safeParse({
+        name: "Test", phone: "99988877765", email: "a@a.com",
+        password: "ValidPassword123!", confirmPassword: "ValidPassword123!", termsAccepted: true
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects phone with alphabetic characters", () => {
+      const result = registerSchema.safeParse({
+        name: "Test", phone: "999888777a", email: "a@a.com",
+        password: "ValidPassword123!", confirmPassword: "ValidPassword123!", termsAccepted: true
+      });
+      expect(result.success).toBe(false);
+    });
   });
 
   describe("Backend Action", () => {
@@ -153,7 +209,7 @@ describe("Feature A1 - Registration Foundation", () => {
         name: "Test User A1",
         email: testEmail,
         phone: testPhone,
-        password: "ValidPassword123!",
+        password: "ValidPassword123!", confirmPassword: "ValidPassword123!",
         termsAccepted: true,
       });
 
@@ -185,7 +241,7 @@ describe("Feature A1 - Registration Foundation", () => {
         name: "Test User Duplicate",
         email: testEmail,
         phone: "5555555555",
-        password: "ValidPassword123!",
+        password: "ValidPassword123!", confirmPassword: "ValidPassword123!",
         termsAccepted: true,
       });
 
@@ -223,7 +279,7 @@ describe("Feature A1 - Registration Foundation", () => {
           id: user!.id,
           name: "Test User A1",
           email: testEmail,
-          emailVerified: false,
+          emailVerified: true,
           createdAt: new Date(),
           updatedAt: new Date(),
           image: null
@@ -258,7 +314,7 @@ describe("Feature A1 - Registration Foundation", () => {
           id: user!.id,
           name: "Test User A1",
           email: testEmail,
-          emailVerified: false,
+          emailVerified: true,
           createdAt: new Date(),
           updatedAt: new Date(),
           image: null

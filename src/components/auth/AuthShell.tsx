@@ -54,11 +54,11 @@ export function LogoBlock({ compact = false }: { compact?: boolean }) {
         <span className="text-[19px] font-bold leading-none">₹</span>
       </div>
       <div className="flex items-center gap-2">
-        <span className="text-[18px] font-semibold tracking-[-0.04em] text-zinc-900">
+        <span className="text-[18px] font-semibold tracking-[-0.04em] text-foreground">
           PayERupee
         </span>
         {!compact && (
-          <span className="rounded-full bg-indigo-600/10 px-2.5 py-0.5 text-[10px] font-semibold tracking-wide text-indigo-600">
+          <span className="rounded-full bg-indigo-600/10 px-2.5 py-0.5 text-[10px] font-semibold tracking-wide text-indigo-600 dark:text-indigo-400">
             Enterprise
           </span>
         )}
@@ -96,7 +96,7 @@ export function InputField({
       className={error ? "animate-field-shake" : ""}
     >
       <label className="block">
-        <span className="mb-1.5 block text-[13px] font-medium text-zinc-600">
+        <span className="mb-1.5 block text-[13px] font-medium text-foreground">
           {label}
         </span>
         <span className="group relative block">
@@ -105,7 +105,7 @@ export function InputField({
               "pointer-events-none absolute left-3.5 top-1/2 h-[15px] w-[15px] -translate-y-1/2 transition-colors duration-150",
               error
                 ? "text-red-400"
-                : "text-zinc-400 group-focus-within:text-indigo-500",
+                : "text-muted-foreground group-focus-within:text-indigo-500 dark:text-indigo-400",
             )}
           />
           <input
@@ -116,10 +116,10 @@ export function InputField({
             autoComplete={autoComplete}
             placeholder={placeholder}
             className={cn(
-              "h-11 w-full rounded-xl border bg-zinc-50/50 pl-10 pr-4 text-[13.5px] text-zinc-900 outline-none ring-0 transition-all duration-200 placeholder:text-zinc-400",
+              "h-11 w-full rounded-xl border bg-muted/50 pl-10 pr-4 text-[13.5px] text-foreground outline-none ring-0 transition-all duration-200 placeholder:text-muted-foreground",
               error
                 ? "border-red-300 bg-red-50/30 focus:border-red-400 focus:ring-2 focus:ring-red-100"
-                : "border-zinc-200 focus:border-indigo-400 focus:bg-white focus:ring-2 focus:ring-indigo-100",
+                : "border-border focus:border-indigo-500/50 focus:bg-card focus:ring-2 focus:ring-indigo-500/20",
             )}
           />
         </span>
@@ -156,7 +156,7 @@ export function TextareaField({
       className={error ? "animate-field-shake" : ""}
     >
       <label className="block">
-        <span className="mb-1.5 block text-[13px] font-medium text-zinc-600">
+        <span className="mb-1.5 block text-[13px] font-medium text-foreground">
           {label}
         </span>
         <span className="group relative block">
@@ -165,7 +165,7 @@ export function TextareaField({
               "pointer-events-none absolute left-3.5 top-3 h-[15px] w-[15px] transition-colors duration-150",
               error
                 ? "text-red-400"
-                : "text-zinc-400 group-focus-within:text-indigo-500",
+                : "text-muted-foreground group-focus-within:text-indigo-500 dark:text-indigo-400",
             )}
           />
           <textarea
@@ -176,10 +176,10 @@ export function TextareaField({
             placeholder={placeholder}
             rows={2}
             className={cn(
-              "w-full resize-none rounded-xl border bg-zinc-50/50 py-3 pl-10 pr-4 text-[13.5px] text-zinc-900 outline-none transition-all duration-200 placeholder:text-zinc-400",
+              "w-full resize-none rounded-xl border bg-muted/50 py-3 pl-10 pr-4 text-[13.5px] text-foreground outline-none transition-all duration-200 placeholder:text-muted-foreground",
               error
                 ? "border-red-300 bg-red-50/30 focus:border-red-400 focus:ring-2 focus:ring-red-100"
-                : "border-zinc-200 focus:border-indigo-400 focus:bg-white focus:ring-2 focus:ring-indigo-100",
+                : "border-border focus:border-indigo-500/50 focus:bg-card focus:ring-2 focus:ring-indigo-500/20",
             )}
           />
         </span>
@@ -218,7 +218,7 @@ export function PasswordField({
       className={error ? "animate-field-shake" : ""}
     >
       <label className="block">
-        <span className="mb-1.5 block text-[13px] font-medium text-zinc-600">
+        <span className="mb-1.5 block text-[13px] font-medium text-foreground">
           {label}
         </span>
         <span className="group relative block">
@@ -227,7 +227,7 @@ export function PasswordField({
               "pointer-events-none absolute left-3.5 top-1/2 h-[15px] w-[15px] -translate-y-1/2 transition-colors duration-150",
               error
                 ? "text-red-400"
-                : "text-zinc-400 group-focus-within:text-indigo-500",
+                : "text-muted-foreground group-focus-within:text-indigo-500 dark:text-indigo-400",
             )}
           />
           <input
@@ -238,10 +238,10 @@ export function PasswordField({
             autoComplete={autoComplete}
             placeholder={placeholder}
             className={cn(
-              "h-11 w-full rounded-xl border bg-zinc-50/50 pl-10 pr-11 text-[13.5px] text-zinc-900 outline-none transition-all duration-200 placeholder:text-zinc-400",
+              "h-11 w-full rounded-xl border bg-muted/50 pl-10 pr-11 text-[13.5px] text-foreground outline-none transition-all duration-200 placeholder:text-muted-foreground",
               error
                 ? "border-red-300 bg-red-50/30 focus:border-red-400 focus:ring-2 focus:ring-red-100"
-                : "border-zinc-200 focus:border-indigo-400 focus:bg-white focus:ring-2 focus:ring-indigo-100",
+                : "border-border focus:border-indigo-500/50 focus:bg-card focus:ring-2 focus:ring-indigo-500/20",
             )}
           />
           <button
@@ -252,7 +252,7 @@ export function PasswordField({
                 ? `Hide ${label.toLowerCase()}`
                 : `Show ${label.toLowerCase()}`
             }
-            className="absolute right-3.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-zinc-400 transition-colors hover:text-zinc-600"
+            className="absolute right-3.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-muted-foreground transition-colors hover:text-foreground"
           >
             {visible ? (
               <EyeOff className="h-[15px] w-[15px]" />
@@ -274,19 +274,21 @@ export function PasswordField({
 export function SubmitButton({
   children,
   loading = false,
+  disabled = false,
 }: {
   children: ReactNode;
   loading?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <motion.button
       variants={fieldFade}
       type="submit"
-      disabled={loading}
+      disabled={loading || disabled}
       whileHover={
-        loading ? {} : { y: -1, boxShadow: "0 10px 24px rgba(79,70,229,.28)" }
+        loading || disabled ? {} : { y: -1, boxShadow: "0 10px 24px rgba(79,70,229,.28)" }
       }
-      whileTap={loading ? {} : { y: 0, scale: 0.99 }}
+      whileTap={loading || disabled ? {} : { y: 0, scale: 0.99 }}
       transition={{ duration: 0.15 }}
       className="group flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 text-[13.5px] font-semibold text-white shadow-[0_4px_14px_rgba(79,70,229,.22)] transition-colors duration-150 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-80"
     >
@@ -308,11 +310,11 @@ export function AuthDivider() {
   return (
     <motion.div
       variants={fieldFade}
-      className="my-5 flex items-center gap-3 text-[11px] font-medium text-zinc-400"
+      className="my-5 flex items-center gap-3 text-[11px] font-medium text-muted-foreground"
     >
-      <div className="h-px flex-1 bg-zinc-200" />
+      <div className="h-px flex-1 bg-border" />
       <span>or continue with</span>
-      <div className="h-px flex-1 bg-zinc-200" />
+      <div className="h-px flex-1 bg-border" />
     </motion.div>
   );
 }
@@ -344,10 +346,10 @@ export function GoogleButton({ callbackURL = "/onboarding" }: { callbackURL?: st
       disabled={loading}
       whileHover={loading ? {} : { y: -1 }}
       whileTap={loading ? {} : { scale: 0.99 }}
-      className="flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-zinc-200 bg-white text-[13.5px] font-medium text-zinc-700 shadow-sm transition-all hover:bg-zinc-50 hover:border-zinc-300 disabled:opacity-60 disabled:cursor-not-allowed"
+      className="flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-border bg-card text-[13.5px] font-medium text-muted-foreground shadow-sm transition-all hover:bg-muted hover:border-foreground/20 dark:hover:border-white/20 disabled:opacity-60 disabled:cursor-not-allowed"
     >
       {loading ? (
-        <span className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-400 border-t-transparent" />
+        <span className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
       ) : (
         <svg aria-hidden="true" className="h-[17px] w-[17px]" viewBox="0 0 24 24">
           <path
@@ -377,14 +379,14 @@ export function GoogleButton({ callbackURL = "/onboarding" }: { callbackURL?: st
 
 export function FloatingFintechPanel() {
   return (
-    <aside className="relative hidden overflow-hidden bg-gradient-to-br from-indigo-50 via-white to-indigo-100/60 lg:sticky lg:top-0 lg:h-[100dvh] lg:flex lg:w-[44%] lg:flex-col lg:items-center lg:justify-center lg:shrink-0">
+    <aside className="relative hidden overflow-hidden bg-gradient-to-br from-indigo-50 via-white to-indigo-100/60 dark:from-zinc-950 dark:via-background dark:to-indigo-950/20 border-r border-transparent dark:border-white/5 lg:sticky lg:top-0 lg:h-[100dvh] lg:flex lg:w-[44%] lg:flex-col lg:items-center lg:justify-center lg:shrink-0">
       {/* Backdrop orbs */}
       <div className="pointer-events-none absolute -left-32 -top-32 h-[480px] w-[480px] rounded-full bg-indigo-400/[0.10] blur-[80px]" />
       <div className="pointer-events-none absolute -bottom-32 -right-24 h-[520px] w-[520px] rounded-full bg-violet-400/[0.08] blur-[80px]" />
 
       {/* Dot grid */}
       <div
-        className="pointer-events-none absolute inset-0 opacity-[0.03]"
+        className="pointer-events-none absolute inset-0 opacity-[0.03] dark:opacity-[0.02]"
         style={{
           backgroundImage:
             "radial-gradient(circle, #4f46e5 1px, transparent 1px)",
@@ -397,7 +399,7 @@ export function FloatingFintechPanel() {
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3, duration: 0.6, ease: [0.22, 1, 0.36, 1] as const }}
-        className="absolute top-10 text-[11px] font-semibold uppercase tracking-[0.22em] text-indigo-400/80"
+        className="absolute top-10 text-[11px] font-semibold uppercase tracking-[0.22em] text-indigo-500 dark:text-indigo-400/80 dark:text-indigo-400/60"
       >
         Trusted by 500+ enterprises
       </motion.p>
@@ -406,23 +408,23 @@ export function FloatingFintechPanel() {
       <motion.div
         animate={{ y: [-5, 5, -5] }}
         transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-        className="relative z-10 w-[260px] rounded-2xl border border-white/90 bg-white/75 p-6 shadow-[0_24px_60px_rgba(79,70,229,.13)] backdrop-blur-xl"
+        className="relative z-10 w-[260px] rounded-2xl border border-white/90 dark:border-white/5 bg-white/75 dark:bg-zinc-900/40 p-6 shadow-[0_24px_60px_rgba(79,70,229,.13)] dark:shadow-[0_24px_60px_rgba(0,0,0,.4)] backdrop-blur-xl"
       >
         <div className="mb-5 flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white shadow-[0_4px_10px_rgba(79,70,229,.3)]">
             <span className="text-base font-bold leading-none">₹</span>
           </div>
           <div>
-            <p className="text-[13px] font-semibold tracking-tight text-zinc-900">
+            <p className="text-[13px] font-semibold tracking-tight text-foreground">
               PayERupee
             </p>
-            <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-indigo-500">
+            <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-indigo-500 dark:text-indigo-400">
               Enterprise
             </p>
           </div>
         </div>
 
-        <div className="mb-5 h-px bg-gradient-to-r from-indigo-100 via-indigo-200 to-transparent" />
+        <div className="mb-5 h-px bg-gradient-to-r from-indigo-100 via-indigo-200 to-transparent dark:from-indigo-500/10 dark:via-indigo-500/20" />
 
         <div className="grid grid-cols-2 gap-x-5 gap-y-4">
           {[
@@ -432,10 +434,10 @@ export function FloatingFintechPanel() {
             ["<100ms", "Settlement"],
           ].map(([value, label]) => (
             <div key={label}>
-              <p className="text-[20px] font-bold leading-none tracking-[-0.04em] text-indigo-700">
+              <p className="text-[20px] font-bold leading-none tracking-[-0.04em] text-indigo-700 dark:text-indigo-400">
                 {value}
               </p>
-              <p className="mt-1.5 text-[9.5px] font-medium uppercase tracking-[0.12em] text-zinc-400">
+              <p className="mt-1.5 text-[9.5px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                 {label}
               </p>
             </div>
@@ -452,22 +454,22 @@ export function FloatingFintechPanel() {
           ease: "easeInOut",
           delay: 0.4,
         }}
-        className="absolute left-[7%] top-[18%] w-[195px] -rotate-[3deg] rounded-2xl border border-white/80 bg-white/90 px-3.5 py-3 shadow-[0_8px_24px_rgba(79,70,229,.09)] backdrop-blur-sm"
+        className="absolute left-[7%] top-[18%] w-[195px] -rotate-[3deg] rounded-2xl border border-white/80 dark:border-white/5 bg-white/90 dark:bg-zinc-900/60 px-3.5 py-3 shadow-[0_8px_24px_rgba(79,70,229,.09)] dark:shadow-[0_8px_24px_rgba(0,0,0,.4)] backdrop-blur-sm"
       >
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-[14px] font-bold text-zinc-800">₹1,24,500</p>
-            <p className="mt-0.5 text-[9px] text-zinc-400">
+            <p className="text-[14px] font-bold text-foreground">₹1,24,500</p>
+            <p className="mt-0.5 text-[9px] text-muted-foreground">
               Acme Corp → 248 accounts
             </p>
           </div>
-          <span className="mt-0.5 rounded-full bg-indigo-50 px-2 py-0.5 text-[8.5px] font-semibold text-indigo-600">
+          <span className="mt-0.5 rounded-full bg-indigo-50 dark:bg-indigo-500/10 px-2 py-0.5 text-[8.5px] font-semibold text-indigo-600 dark:text-indigo-400">
             Bulk
           </span>
         </div>
         <div className="mt-2.5 flex items-center gap-1.5">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-          <span className="text-[9px] font-semibold text-emerald-600">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-600/80" />
+          <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
             Approved
           </span>
         </div>
@@ -482,28 +484,28 @@ export function FloatingFintechPanel() {
           ease: "easeInOut",
           delay: 0.8,
         }}
-        className="absolute bottom-[18%] right-[6%] w-[178px] rotate-[2.5deg] rounded-2xl border border-white/80 bg-white/90 px-3.5 py-3 shadow-[0_8px_24px_rgba(79,70,229,.09)] backdrop-blur-sm"
+        className="absolute bottom-[18%] right-[6%] w-[178px] rotate-[2.5deg] rounded-2xl border border-white/80 dark:border-white/5 bg-white/90 dark:bg-zinc-900/60 px-3.5 py-3 shadow-[0_8px_24px_rgba(79,70,229,.09)] dark:shadow-[0_8px_24px_rgba(0,0,0,.4)] backdrop-blur-sm"
       >
         <div className="mb-2 flex items-center gap-2">
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-rose-100 text-[9px] font-bold text-rose-600">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-500/10 text-[9px] font-bold text-rose-600 dark:text-rose-400">
             R
           </span>
-          <span className="text-[10px] font-semibold text-zinc-700">
+          <span className="text-[10px] font-semibold text-muted-foreground">
             Razorpay Ltd
           </span>
-          <span className="ml-auto text-[10.5px] font-bold text-zinc-800">
+          <span className="ml-auto text-[10.5px] font-bold text-foreground">
             ₹45,200
           </span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="relative flex h-1.5 w-1.5">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-600/80" />
           </span>
-          <span className="text-[9px] font-semibold text-emerald-600">
+          <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
             Settled
           </span>
-          <span className="ml-auto text-[9px] text-zinc-400">Real-time</span>
+          <span className="ml-auto text-[9px] text-muted-foreground">Real-time</span>
         </div>
       </motion.div>
 
@@ -516,10 +518,10 @@ export function FloatingFintechPanel() {
           ease: "easeInOut",
           delay: 1.2,
         }}
-        className="absolute bottom-[32%] left-[6%] w-[168px] -rotate-[2deg] rounded-2xl border border-white/80 bg-white/90 px-3.5 py-3 shadow-[0_8px_24px_rgba(79,70,229,.09)] backdrop-blur-sm"
+        className="absolute bottom-[32%] left-[6%] w-[168px] -rotate-[2deg] rounded-2xl border border-white/80 dark:border-white/5 bg-white/90 dark:bg-zinc-900/60 px-3.5 py-3 shadow-[0_8px_24px_rgba(79,70,229,.09)] dark:shadow-[0_8px_24px_rgba(0,0,0,.4)] backdrop-blur-sm"
       >
         <div className="flex items-center gap-1.5">
-          {["bg-emerald-500", "bg-indigo-400", "bg-zinc-200"].map((c, i) => (
+          {["bg-emerald-500 dark:bg-emerald-600/80", "bg-indigo-400", "bg-zinc-200"].map((c, i) => (
             <span
               key={i}
               className={`flex h-5 w-5 items-center justify-center rounded-full ${c} text-[9px] text-white`}
@@ -527,11 +529,11 @@ export function FloatingFintechPanel() {
               {i < 2 ? "✓" : "·"}
             </span>
           ))}
-          <span className="ml-0.5 text-[10px] font-semibold text-zinc-700">
+          <span className="ml-0.5 text-[10px] font-semibold text-muted-foreground">
             2 / 3
           </span>
         </div>
-        <p className="mt-2 text-[9px] text-zinc-400">Multi-level approval</p>
+        <p className="mt-2 text-[9px] text-muted-foreground">Multi-level approval</p>
       </motion.div>
 
       {/* Bottom tagline */}
@@ -539,7 +541,7 @@ export function FloatingFintechPanel() {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5, duration: 0.6, ease: [0.22, 1, 0.36, 1] as const }}
-        className="absolute bottom-10 text-[11px] text-zinc-400/70"
+        className="absolute bottom-10 text-[11px] text-muted-foreground/70"
       >
         ISO 27001 · PCI-DSS · SOC 2 Type II
       </motion.p>
