@@ -50,7 +50,7 @@ export function getTransporter(): nodemailer.Transporter {
 /**
  * Reusable PayERupee transactional email shell
  */
-function getEmailShell(content: string): string {
+export function getEmailShell(content: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -106,15 +106,15 @@ function getEmailShell(content: string): string {
 </html>`;
 }
 
-function getTextShell(content: string): string {
-  return `PayERupee Solutions\n────────────────────\n\n${content}\n\n---\nNeed help? Contact our support team at support@payerupee.com\n© 2026 PayERupee Solutions. All rights reserved.`;
+export function getTextShell(content: string): string {
+  return `PayERupee Solutions\n=======================================================\n\n${content}\n\n---\nNeed help? Contact our support team at support@payerupee.com\n(c) 2026 PayERupee Solutions. All rights reserved.`;
 }
 
 export async function sendEmail(options: SendEmailOptions) {
   if (!env.SMTP_ENABLED) {
     // Explicitly development-only transport if real SMTP is not explicitly enabled
     console.log("\n=======================================================");
-    console.log("📨 [DEV MAILER] TRANSACTIONAL EMAIL DISPATCHED");
+    console.log("🚀 [DEV MAILER] TRANSACTIONAL EMAIL DISPATCHED");
     console.log(`To: ${options.to}`);
     console.log(`Subject: ${options.subject}`);
     console.log(`Text:\n${options.text}`);
@@ -193,6 +193,55 @@ If you did not create this account, you can safely ignore this email.`;
   await sendEmail({
     to: payload.user.email,
     subject: "Verify your PayERupee email",
+    html: getEmailShell(htmlContent),
+    text: getTextShell(textContent),
+  });
+}
+
+export async function sendPasswordResetEmail(payload: EmailVerificationPayload) {
+  const safeName = escapeHtml(payload.user.name);
+  const safeUrl = escapeHtml(payload.url);
+
+  const htmlContent = `
+    <p style="margin:0 0 16px 0;color:#111827;font-weight:600;font-size:16px;">Hello ${safeName},</p>
+    <h2 style="margin:0 0 16px 0;color:#111827;font-size:20px;font-weight:700;">Reset your PayERupee password</h2>
+    <p style="margin:0 0 24px 0;">We received a request to reset the password for your PayERupee account.</p>
+
+    <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin-bottom:24px;">
+      <tr>
+        <td align="center" bgcolor="#4f46e5" style="border-radius:8px;">
+          <a href="${safeUrl}" target="_blank" style="display:inline-block;padding:12px 24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;background-color:#4f46e5;">Reset Password</a>
+        </td>
+      </tr>
+    </table>
+
+    <p style="margin:0 0 24px 0;font-size:14px;color:#6b7280;">This link expires in 1 hour.</p>
+
+    <div style="background-color:#f3f4f6;border-radius:6px;padding:16px;margin-bottom:24px;">
+      <p style="margin:0 0 8px 0;font-size:13px;color:#4b5563;font-weight:500;">If the button doesn't work, copy and paste this secure link:</p>
+      <p style="margin:0;font-size:13px;color:#4f46e5;word-break:break-all;"><a href="${safeUrl}" style="color:#4f46e5;text-decoration:underline;">${safeUrl}</a></p>
+    </div>
+
+    <p style="margin:0;font-size:13px;color:#6b7280;"><strong>Security note:</strong> If you did not request this reset, you can safely ignore this email. Your password will remain unchanged.</p>
+  `;
+
+  const textContent = `Hello ${payload.user.name},
+
+Reset your PayERupee password
+
+We received a request to reset the password for your PayERupee account.
+You can reset your password by visiting the link below:
+
+${payload.url}
+
+This link expires in 1 hour.
+
+Security note:
+If you did not request this reset, you can safely ignore this email. Your password will remain unchanged.`;
+
+  await sendEmail({
+    to: payload.user.email,
+    subject: "Reset your PayERupee password",
     html: getEmailShell(htmlContent),
     text: getTextShell(textContent),
   });

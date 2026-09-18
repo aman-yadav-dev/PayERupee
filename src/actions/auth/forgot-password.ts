@@ -1,6 +1,7 @@
 "use server";
 
-import { db } from "@/infrastructure/database/db";
+import { headers } from "next/headers";
+import { auth } from "@/modules/auth/infrastructure/auth";
 import { forgotPasswordSchema } from "@/modules/auth/schemas/auth.schema";
 import { errorResponse, successResponse } from "@/shared/utils/responses";
 import type { ApiResponse } from "@/shared/types/api";
@@ -19,23 +20,22 @@ export async function forgotPasswordAction(
 
     const { email } = parseResult.data;
 
-    // Check if user exists (without revealing exact existence in error for security)
-    const user = await db.user.findUnique({
-      where: { email },
+    // Better Auth handles enumeration protection natively inside requestPasswordReset.
+    // It will return success whether the email exists or not.
+    // @ts-ignore: Better Auth typings might map this to forgetPassword or requestPasswordReset
+    const apiCall = auth.api.forgetPassword || auth.api.requestPasswordReset;
+    await apiCall({
+      body: {
+        email,
+        redirectTo: "/reset-password",
+      },
+      headers: await headers(),
     });
 
-    if (!user) {
-      // Return success response to prevent email enumeration attacks
-      return successResponse(
-        { email },
-        "If an account exists with this email, recovery instructions have been sent."
-      );
-    }
-
-    // Return success message
+    // Return generic success message to prevent enumeration
     return successResponse(
       { email },
-      "Password reset instructions have been sent to your email."
+      "If an account exists with this email, recovery instructions have been sent."
     );
   } catch (error: any) {
     console.error("❌ Forgot Password Error:", error);

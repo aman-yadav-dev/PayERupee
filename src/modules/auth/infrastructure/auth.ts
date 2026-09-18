@@ -18,6 +18,21 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     autoSignIn: true,
+    resetPasswordTokenExpiresIn: 3600, // 1 hour
+    sendResetPassword: async ({ user, url, token }) => {
+      const { sendPasswordResetEmail } = await import("@/infrastructure/notifications/mailer");
+
+      const resetUrl = new URL(url);
+      // The callbackURL is where Better Auth will redirect the user after token validation
+      resetUrl.searchParams.set("callbackURL", `${resetUrl.origin}/reset-password`);
+
+      await sendPasswordResetEmail({
+        user: { id: user.id, email: user.email!, name: user.name },
+        url: resetUrl.toString(),
+        token,
+      });
+    },
+    revokeSessionsOnPasswordReset: true,
   },
 
   emailVerification: {
