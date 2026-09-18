@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useTransition, Suspense, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { Mail } from "lucide-react";
+import { Mail, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   AuthDivider,
@@ -29,6 +29,36 @@ interface LoginFormData {
 interface LoginErrors {
   email?: string;
   password?: string;
+}
+
+function ResetSuccessBanner() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("reset") === "success") {
+      setShow(true);
+      // Clean up the URL
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, newUrl);
+    }
+  }, [searchParams]);
+
+  if (!show) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mb-6 flex items-start gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-emerald-600 dark:text-emerald-500"
+    >
+      <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
+      <div className="text-[13px] font-medium leading-relaxed">
+        Password successfully updated. Please sign in with your new password.
+      </div>
+    </motion.div>
+  );
 }
 
 export default function LoginPage() {
@@ -126,6 +156,10 @@ export default function LoginPage() {
           Sign in to your workspace
         </p>
       </motion.div>
+
+      <Suspense fallback={null}>
+        <ResetSuccessBanner />
+      </Suspense>
 
       {/* Form */}
       <AnimatePresence mode="wait">
