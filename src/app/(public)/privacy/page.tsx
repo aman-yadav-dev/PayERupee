@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, Lock, Shield, FileCheck2 } from "lucide-react";
+import { LogoBlock } from "@/components/auth/AuthShell";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export const metadata = {
   title: "Privacy Policy - PayERupee",
@@ -8,10 +10,17 @@ export const metadata = {
 
 export default function PrivacyPolicyPage() {
   return (
-    <div className="min-h-screen bg-zinc-50 text-zinc-900">
+    <div className="min-h-[100dvh] relative overflow-hidden bg-gradient-to-br from-indigo-50 via-white to-indigo-100/60 dark:from-zinc-950 dark:via-background dark:to-indigo-950/20 text-foreground">
+      {/* Backdrop orbs */}
+      <div className="pointer-events-none absolute -left-32 -top-32 h-[480px] w-[480px] rounded-full bg-indigo-400/[0.10] blur-[80px]" />
+      <div className="pointer-events-none absolute -bottom-32 -right-24 h-[520px] w-[520px] rounded-full bg-violet-400/[0.08] blur-[80px]" />
+      {/* Dot grid */}
+      <div className="pointer-events-none absolute inset-0 opacity-[0.03] dark:opacity-[0.02]" style={{ backgroundImage: "radial-gradient(circle, #4f46e5 1px, transparent 1px)", backgroundSize: "28px 28px" }} />
+
+      <div className="relative z-10">
       {/* Top Navigation */}
-      <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+      <header className="sticky top-0 z-30 border-b border-zinc-200 dark:border-white/5 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 sm:px-6 py-4">
           <div className="flex items-center gap-3">
             <Link
               href="/"
@@ -19,51 +28,54 @@ export default function PrivacyPolicyPage() {
             >
               ₹
             </Link>
-            <span className="font-bold tracking-tight text-lg text-zinc-900">PayERupee</span>
+            <span className="font-bold tracking-tight text-lg text-zinc-900 dark:text-zinc-50">PayERupee</span>
             <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-[11px] font-semibold text-zinc-600">
               Privacy
             </span>
           </div>
 
-          <Link
-            href="/register"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3.5 py-1.5 text-[13px] font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Registration
-          </Link>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <ThemeToggle />
+            <Link
+              href="/register"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/5 px-3.5 py-1.5 text-[13px] font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-white/10 transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span className="hidden sm:inline-block">Back to Registration</span><span className="sm:hidden">Back</span>
+            </Link>
+          </div>
         </div>
       </header>
 
       {/* Hero Header */}
-      <section className="border-b border-zinc-200 bg-white py-12 px-6">
+      <section className="border-b border-zinc-200 dark:border-white/5 bg-transparent py-10 sm:py-12 px-4 sm:px-6">
         <div className="mx-auto max-w-4xl text-center">
-          <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 mb-4">
+          <div className="inline-flex items-center gap-2 rounded-full bg-indigo-600/10 px-3 py-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 mb-4">
             <Lock className="h-3.5 w-3.5" />
             Last Updated: March 1, 2026
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl text-zinc-900">
+          <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl text-zinc-900 dark:text-zinc-50 dark:text-zinc-50">
             Privacy Policy & Data Security
           </h1>
-          <p className="mt-3 text-[15px] text-zinc-500 max-w-2xl mx-auto">
+          <p className="mt-3 text-sm sm:text-[15px] text-zinc-500 dark:text-zinc-400 dark:text-zinc-400 max-w-2xl mx-auto">
             How PayERupee collects, secures, encrypts, and processes personal and financial data across our B2B fintech gateway.
           </p>
         </div>
       </section>
 
       {/* Content */}
-      <main className="mx-auto max-w-4xl px-6 py-12">
-        <div className="space-y-10 rounded-2xl border border-zinc-200 bg-white p-8 sm:p-12 shadow-sm leading-relaxed text-[14.5px] text-zinc-700">
-          
+      <main className="mx-auto max-w-4xl px-4 sm:px-6 py-8 sm:py-12">
+        <div className="space-y-8 sm:space-y-10 rounded-2xl border border-zinc-200 dark:border-white/5 bg-white/90 dark:bg-zinc-950/60 backdrop-blur-md p-6 sm:p-8 md:p-12 shadow-sm leading-relaxed text-[14px] sm:text-[14.5px] text-zinc-700 dark:text-zinc-300">
+
           <section>
-            <h2 className="text-xl font-bold text-zinc-900 mb-3 flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-50 text-emerald-600 text-xs font-bold">1</span>
+            <h2 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-50 mb-3 flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-indigo-600/10 text-indigo-600 dark:text-indigo-400 dark:text-indigo-400 text-xs font-bold">1</span>
               Information We Collect
             </h2>
             <p>
               When you register as a merchant, sign in using Google OAuth, or utilize our payment routing system, we collect:
             </p>
-            <ul className="mt-2.5 space-y-2 pl-4 list-disc text-[14px]">
+            <ul className="mt-2.5 space-y-2 pl-4 sm:pl-5 list-disc text-[13.5px] sm:text-[14px]">
               <li><strong>Merchant Details:</strong> Full Name, Email, Phone Number, Company Name, and Registered Address.</li>
               <li><strong>Authentication Data:</strong> OAuth tokens, password hashes (argon2 / scrypt via Better Auth), session tokens, and IP addresses.</li>
               <li><strong>Beneficiary & Transaction Details:</strong> Beneficiary bank account numbers, IFSC codes, UPI VPAs, payout amounts, and UTR numbers.</li>
@@ -71,14 +83,14 @@ export default function PrivacyPolicyPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-bold text-zinc-900 mb-3 flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-50 text-emerald-600 text-xs font-bold">2</span>
+            <h2 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-50 mb-3 flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-indigo-600/10 text-indigo-600 dark:text-indigo-400 dark:text-indigo-400 text-xs font-bold">2</span>
               How We Use Your Data
             </h2>
             <p>
               We process information strictly for operational, legal, and security requirements:
             </p>
-            <ul className="mt-2.5 space-y-2 pl-4 list-disc text-[14px]">
+            <ul className="mt-2.5 space-y-2 pl-4 sm:pl-5 list-disc text-[13.5px] sm:text-[14px]">
               <li>Processing real-time bank payouts via IMPS, NEFT, RTGS, and UPI.</li>
               <li>Conducting automated fraud prevention, blacklist checks, and AML compliance scoring.</li>
               <li>Providing transaction webhooks, status notifications, and real-time reconciliation reports.</li>
@@ -87,29 +99,29 @@ export default function PrivacyPolicyPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-bold text-zinc-900 mb-3 flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-50 text-emerald-600 text-xs font-bold">3</span>
+            <h2 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-50 mb-3 flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-indigo-600/10 text-indigo-600 dark:text-indigo-400 dark:text-indigo-400 text-xs font-bold">3</span>
               Data Protection & Cryptography Standards
             </h2>
             <p>
               PayERupee implements bank-grade cryptographic security across all layers:
             </p>
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
-                <div className="flex items-center gap-2 font-bold text-zinc-900 text-sm mb-1">
-                  <Shield className="h-4 w-4 text-indigo-600" />
+              <div className="rounded-xl border border-zinc-200 dark:border-white/5 bg-white/50 dark:bg-zinc-900/50 p-4 shadow-sm">
+                <div className="flex items-center gap-2 font-bold text-zinc-900 dark:text-zinc-50 text-sm mb-1">
+                  <Shield className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
                   AES-256 GCM at Rest
                 </div>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
                   All sensitive database credentials, API secrets, and beneficiary accounts are encrypted at rest using AES-256.
                 </p>
               </div>
-              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
-                <div className="flex items-center gap-2 font-bold text-zinc-900 text-sm mb-1">
-                  <FileCheck2 className="h-4 w-4 text-indigo-600" />
+              <div className="rounded-xl border border-zinc-200 dark:border-white/5 bg-white/50 dark:bg-zinc-900/50 p-4 shadow-sm">
+                <div className="flex items-center gap-2 font-bold text-zinc-900 dark:text-zinc-50 text-sm mb-1">
+                  <FileCheck2 className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
                   TLS 1.3 in Transit
                 </div>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
                   All web traffic, API calls, and webhook events are strictly transmitted over encrypted TLS 1.3 channels.
                 </p>
               </div>
@@ -117,8 +129,8 @@ export default function PrivacyPolicyPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-bold text-zinc-900 mb-3 flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-50 text-emerald-600 text-xs font-bold">4</span>
+            <h2 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-50 mb-3 flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-indigo-600/10 text-indigo-600 dark:text-indigo-400 dark:text-indigo-400 text-xs font-bold">4</span>
               Third-Party Integrations & Google OAuth
             </h2>
             <p>
@@ -127,8 +139,8 @@ export default function PrivacyPolicyPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-bold text-zinc-900 mb-3 flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-50 text-emerald-600 text-xs font-bold">5</span>
+            <h2 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-50 mb-3 flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-indigo-600/10 text-indigo-600 dark:text-indigo-400 dark:text-indigo-400 text-xs font-bold">5</span>
               Data Retention
             </h2>
             <p>
@@ -137,16 +149,17 @@ export default function PrivacyPolicyPage() {
           </section>
 
           <section className="pt-6 border-t border-zinc-200">
-            <h2 className="text-base font-bold text-zinc-900 mb-2">Data Protection Officer</h2>
-            <p className="text-[13.5px] text-zinc-500">
+            <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-50 mb-2">Data Protection Officer</h2>
+            <p className="text-[13.5px] text-zinc-500 dark:text-zinc-400">
               For any privacy concerns, data deletion requests, or compliance inquiries, please contact our Data Protection Officer at{" "}
-              <a href="mailto:privacy@payerupee.com" className="font-semibold text-emerald-600 hover:underline">
+              <a href="mailto:privacy@payerupee.com" className="font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
                 privacy@payerupee.com
               </a>.
             </p>
           </section>
         </div>
       </main>
+      </div>
     </div>
   );
 }
