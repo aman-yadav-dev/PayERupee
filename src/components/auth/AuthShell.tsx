@@ -319,7 +319,7 @@ export function AuthDivider() {
   );
 }
 
-export function GoogleButton({ callbackURL = "/onboarding" }: { callbackURL?: string }) {
+export function GoogleButton({ callbackURL = "/auth-sync" }: { callbackURL?: string }) {
   const [loading, setLoading] = useState(false);
 
   async function handleGoogleSignIn() {
