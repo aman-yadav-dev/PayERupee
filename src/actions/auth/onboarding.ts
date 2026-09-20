@@ -33,14 +33,12 @@ export async function completeMerchantOnboardingAction(
       );
     }
 
-    const { businessName, phone, address } = parseResult.data;
+    const { phone } = parseResult.data;
 
     // 3. Execute atomic merchant onboarding
     await onboardMerchant({
       userId,
-      businessName,
       phone,
-      address,
     });
 
     return successResponse(

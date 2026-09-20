@@ -65,17 +65,7 @@ export const resetPasswordSchema = z.object({
 });
 
 export const onboardingSchema = z.object({
-  businessName: z
-    .string()
-    .trim()
-    .min(2, "Company name must be at least 2 characters")
-    .max(150, "Company name is too long"),
   phone: phoneValidator,
-  address: z
-    .string()
-    .trim()
-    .min(5, "Address must be at least 5 characters")
-    .max(255, "Address is too long"),
   termsAccepted: z
     .boolean()
     .default(false)
