@@ -34,6 +34,7 @@ function createReq(fieldId: string, filename = "test.pdf", buffer = validPDF, ov
   return new NextRequest("http://localhost/api/v1/merchant/kyc/documents", { method: "POST", body: formData });
 }
 
+let app: any;
 describe("Phase C3: Merchant KYC Documents - Hardened Matrix", () => {
   beforeEach(async () => {
     await db.kycDocument.deleteMany();
@@ -85,9 +86,9 @@ describe("Phase C3: Merchant KYC Documents - Hardened Matrix", () => {
     }});
     strFieldId = s1.id;
 
-    const appA = await db.kycApplication.create({ data: { merchantProfileId: mockMerchantIdA, formVersionId, status: "PENDING_SUBMISSION" }});
+    const appA = await db.kycApplication.create({ data: { merchantProfileId: mockMerchantIdA, cycles: { create: [{ cycleNumber: 1, isCurrentCycle: true, formVersionId, status: "PENDING_SUBMISSION" }] } }, include: { cycles: true } }); appIdA = appA.id;
     appIdA = appA.id;
-    const appB = await db.kycApplication.create({ data: { merchantProfileId: mockMerchantIdB, formVersionId, status: "PENDING_SUBMISSION" }});
+    const appB = await db.kycApplication.create({ data: { merchantProfileId: mockMerchantIdB, cycles: { create: [{ cycleNumber: 1, isCurrentCycle: true, formVersionId, status: "PENDING_SUBMISSION" }] } }, include: { cycles: true } }); appIdB = appB.id;
     appIdB = appB.id;
 
     vi.mocked(requireMerchantContext).mockResolvedValue({ userId: mockUserIdA, merchantProfileId: mockMerchantIdA } as any);
@@ -128,7 +129,8 @@ describe("Phase C3: Merchant KYC Documents - Hardened Matrix", () => {
       expect(res.status).toBe(201);
       const data = await res.json();
       const doc = await db.kycDocument.findUnique({ where: { id: data.document.id } });
-      expect(doc!.applicationId).toBe(appIdA);
+      app = await db.kycApplication.findUnique({where:{id:appIdA}, include:{cycles:true}});
+      expect(doc!.submissionCycleId).toBe(app!.cycles[0].id);
     });
     it("7. cross-merchant download -> 404", async () => {
       vi.mocked(requireMerchantContext).mockResolvedValue({ userId: mockUserIdB, merchantProfileId: mockMerchantIdB } as any);
@@ -159,21 +161,21 @@ describe("Phase C3: Merchant KYC Documents - Hardened Matrix", () => {
       expect(res.status).toBe(201);
     });
     it("11. REJECTED + allowResubmission=true allowed", async () => {
-      await db.kycApplication.update({ where: { id: appIdA }, data: { status: "REJECTED", allowResubmission: true }});
+      app = await db.kycApplication.findUnique({ where: { id: appIdA }, include: { cycles: true } }); await db.kycSubmissionCycle.update({ where: { id: app!.cycles[0].id }, data: { status: "REJECTED", allowResubmission: true }});
       const res = await uploadDoc(createReq(fileFieldId1));
       expect(res.status).toBe(201);
     });
     it("12. REJECTED + allowResubmission=false blocked", async () => {
-      await db.kycApplication.update({ where: { id: appIdA }, data: { status: "REJECTED", allowResubmission: false }});
+      app = await db.kycApplication.findUnique({ where: { id: appIdA }, include: { cycles: true } }); await db.kycSubmissionCycle.update({ where: { id: app!.cycles[0].id }, data: { status: "REJECTED", allowResubmission: false }});
       const res = await uploadDoc(createReq(fileFieldId1));
       expect(res.status).toBe(409);
     });
     it("13-14. UNDER_REVIEW and APPROVED blocked", async () => {
-      await db.kycApplication.update({ where: { id: appIdA }, data: { status: "UNDER_REVIEW" }});
+      app = await db.kycApplication.findUnique({ where: { id: appIdA }, include: { cycles: true } }); await db.kycSubmissionCycle.update({ where: { id: app!.cycles[0].id }, data: { status: "UNDER_REVIEW" }});
       const res1 = await uploadDoc(createReq(fileFieldId1));
       expect(res1.status).toBe(409);
       
-      await db.kycApplication.update({ where: { id: appIdA }, data: { status: "APPROVED" }});
+      app = await db.kycApplication.findUnique({ where: { id: appIdA }, include: { cycles: true } }); await db.kycSubmissionCycle.update({ where: { id: app!.cycles[0].id }, data: { status: "APPROVED" }});
       const res2 = await uploadDoc(createReq(fileFieldId1));
       expect(res2.status).toBe(409);
     });
@@ -233,7 +235,7 @@ describe("Phase C3: Merchant KYC Documents - Hardened Matrix", () => {
       const data = await r.json();
       const doc = await db.kycDocument.findUnique({ where: { id: data.document.id }});
       expect(doc!.storageKey).not.toContain("etc/passwd");
-      expect(doc!.storageKey).toMatch(/^kyc_documents\//);
+      expect(doc!.storageKey).toMatch(/^merchant\//);
     });
     it("33. maxSize 1MB rejects larger file", async () => {
       const buf = Buffer.alloc(1.5 * 1024 * 1024, 0);
@@ -270,9 +272,8 @@ describe("Phase C3: Merchant KYC Documents - Hardened Matrix", () => {
       const spy = vi.spyOn(LocalDiskStorageAdapter.prototype, "put").mockRejectedValueOnce(new Error("Storage I/O Error"));
       const r = await uploadDoc(createReq(fileFieldId1));
       expect(r.status).toBe(500);
-      const docs = await db.kycDocument.findMany({ where: { applicationId: appIdA }});
-      expect(docs).toHaveLength(1);
-      expect(docs[0].status).toBe("PENDING");
+      const docs = await db.kycDocument.findMany({ where: { submissionCycleId: (await db.kycApplication.findUnique({where: {id: appIdA}, include: {cycles: true}}))!.cycles[0].id }});
+      expect(docs).toHaveLength(0);
       spy.mockRestore();
     });
   });
@@ -330,7 +331,7 @@ describe("Phase C3: Merchant KYC Documents - Hardened Matrix", () => {
       expect(success).toBe(1);
       expect(conflicts).toBe(2);
       
-      const docs = await db.kycDocument.findMany({ where: { applicationId: appIdA }});
+      const docs = await db.kycDocument.findMany({ where: { submissionCycleId: (await db.kycApplication.findUnique({where: {id: appIdA}, include: {cycles: true}}))!.cycles[0].id }});
       expect(docs).toHaveLength(1);
     });
 

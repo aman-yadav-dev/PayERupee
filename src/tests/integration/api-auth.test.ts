@@ -41,7 +41,7 @@ describe("M2M Payouts API Authentication & Authorization", () => {
     });
     if (kycStatus) {
       await db.kycApplication.create({
-        data: { merchantProfileId: mockMerchantId, status: kycStatus as any }
+        data: { merchantProfileId: mockMerchantId, cycles: { create: { cycleNumber: 1, isCurrentCycle: true, status: kycStatus as any, formVersionId: (await db.kycFormVersion.findFirst() || await db.kycFormVersion.create({ data: { formId: (await db.kycForm.create({ data: { name: "test-form-api" }})).id, versionNumber: 1, status: "PUBLISHED" }})).id } } }
       });
     }
     await db.ledgerAccount.create({

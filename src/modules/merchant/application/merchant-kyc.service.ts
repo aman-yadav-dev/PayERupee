@@ -4,6 +4,16 @@ import { logAction } from "@/modules/audit/domain/audit.service";
 import { AuditActorType, AuditEntity, AuditAction, MerchantType } from "@prisma/client";
 import crypto from "crypto";
 
+function resolveCurrentCycle(application: any) {
+  if (!application || !application.cycles) throw new KycStateError("No KYC cycles loaded.");
+  const currentCycles = application.cycles.filter((c: any) => c.isCurrentCycle);
+  if (currentCycles.length === 0) throw new KycStateError("No active KYC cycle found.");
+  if (currentCycles.length > 1) {
+    throw new KycStateError("Multiple current cycles detected. Database invariant violated.");
+  }
+  return currentCycles[0];
+}
+
 const storageProvider = new LocalDiskStorageAdapter();
 
 export class ApplicationNotFoundError extends Error {
@@ -62,31 +72,53 @@ export async function getMerchantKycApplication(merchantProfileId: string) {
     where: { merchantProfileId },
     select: {
       id: true,
-      status: true,
-      submittedAt: true,
-      reviewedAt: true,
-      rejectionReason: true,
-      allowResubmission: true,
       createdAt: true,
       updatedAt: true,
-      formVersion: {
+      cycles: {
+        where: { isCurrentCycle: true },
         select: {
           id: true,
-          versionNumber: true,
-          form: {
-            select: { name: true }
+          status: true,
+          formVersionId: true,
+          rejectionReason: true,
+          allowResubmission: true,
+          reviewerId: true,
+          submittedAt: true,
+          reviewedAt: true,
+          isCurrentCycle: true,
+          formVersion: {
+            select: {
+              id: true,
+              versionNumber: true,
+              form: { select: { name: true } }
+            }
+          },
+          answers: {
+            select: { fieldDefinitionId: true, value: true }
           }
-        }
-      },
-      answers: {
-        select: {
-          fieldDefinitionId: true,
-          value: true
         }
       }
     }
   });
-  return application;
+
+  if (!application) return null;
+  if (!application.cycles || application.cycles.length === 0) return null;
+  const cycle = resolveCurrentCycle(application);
+
+  return {
+    id: application.id,
+    createdAt: application.createdAt,
+    updatedAt: application.updatedAt,
+    status: cycle.status,
+    formVersionId: cycle.formVersionId,
+    rejectionReason: cycle.rejectionReason,
+    allowResubmission: cycle.allowResubmission,
+    reviewerId: cycle.reviewerId,
+    submittedAt: cycle.submittedAt,
+    reviewedAt: cycle.reviewedAt,
+    formVersion: cycle.formVersion,
+    answers: cycle.answers
+  };
 }
 
 export async function getActiveKycForm(merchantProfileId: string) {
@@ -179,50 +211,53 @@ export async function saveKycAnswers(merchantProfileId: string, answers: { field
   }
 
   return await db.$transaction(async (tx) => {
-    // Find or create application
-    let application = await tx.kycApplication.findUnique({ where: { merchantProfileId } });
+    let application = await tx.kycApplication.findUnique({ 
+      where: { merchantProfileId },
+      include: { cycles: { where: { isCurrentCycle: true } } }
+    });
 
     if (!application) {
       const formVersion = await tx.kycFormVersion.findFirst({
         where: { status: "PUBLISHED" },
         orderBy: { publishedAt: "desc" }
       });
-
-      if (!formVersion) {
-        throw new FormNotFoundError();
-      }
+      if (!formVersion) throw new FormNotFoundError();
 
       application = await tx.kycApplication.create({
         data: {
           merchantProfileId,
-          formVersionId: formVersion.id,
-          status: "PENDING_SUBMISSION",
-          allowResubmission: true
-        }
+          cycles: {
+            create: {
+              cycleNumber: 1,
+              formVersionId: formVersion.id,
+              isCurrentCycle: true,
+              allowResubmission: true,
+              status: "PENDING_SUBMISSION"
+            }
+          }
+        },
+        include: { cycles: { where: { isCurrentCycle: true } } }
       });
     } else {
-      // Lock the application for concurrency correctness
       application = await tx.kycApplication.update({
         where: { id: application.id },
-        data: { updatedAt: new Date() }
+        data: { updatedAt: new Date() },
+        include: { cycles: { where: { isCurrentCycle: true } } }
       });
     }
 
-    // Validate State
-    if (application.status === "UNDER_REVIEW" || application.status === "APPROVED") {
-      throw new KycStateError(`Cannot modify application in ${application.status} state.`);
+    const cycle = resolveCurrentCycle(application);
+
+    if (cycle.status === "UNDER_REVIEW" || cycle.status === "APPROVED") {
+      throw new KycStateError(`Cannot modify application in ${cycle.status} state.`);
     }
 
-    if (application.status === "REJECTED" && !application.allowResubmission) {
+    if (cycle.status === "REJECTED" && !cycle.allowResubmission) {
       throw new KycStateError("Resubmission is not allowed for this application.");
     }
 
-    if (!application.formVersionId) {
-      throw new FormNotFoundError();
-    }
-
     const fields = await tx.kycFieldDefinition.findMany({
-      where: { formVersionId: application.formVersionId }
+      where: { formVersionId: cycle.formVersionId }
     });
 
     const validAnswers = [];
@@ -239,7 +274,7 @@ export async function saveKycAnswers(merchantProfileId: string, answers: { field
       validateFieldValue(field, ans.value);
 
       validAnswers.push({
-        applicationId: application.id,
+        submissionCycleId: cycle.id,
         fieldDefinitionId: field.id,
         value: ans.value
       });
@@ -248,8 +283,8 @@ export async function saveKycAnswers(merchantProfileId: string, answers: { field
     if (validAnswers.length > 0) {
       await Promise.all(validAnswers.map(ans => tx.kycAnswer.upsert({
         where: {
-          applicationId_fieldDefinitionId: {
-            applicationId: ans.applicationId,
+          submissionCycleId_fieldDefinitionId: {
+            submissionCycleId: ans.submissionCycleId,
             fieldDefinitionId: ans.fieldDefinitionId
           }
         },
@@ -258,7 +293,7 @@ export async function saveKycAnswers(merchantProfileId: string, answers: { field
       })));
     }
 
-    return { applicationId: application.id, status: application.status, savedCount: validAnswers.length };
+    return { applicationId: application.id, status: cycle.status, savedCount: validAnswers.length };
   });
 }
 
@@ -273,126 +308,147 @@ export function detectMimeType(buffer: Buffer): string | null {
   return null;
 }
 
-export async function uploadKycDocument(merchantProfileId: string, fieldId: string, buffer: Buffer, originalFilename: string) {
+export async function uploadKycDocument(
+  merchantProfileId: string,
+  fieldDefinitionId: string,
+  fileBuffer: Buffer,
+  originalFilename: string,
+  mimeType?: string
+) {
   const profile = await db.merchantProfile.findUnique({
     where: { id: merchantProfileId },
     select: { merchantType: true }
   });
 
   const merchantType = profile?.merchantType as MerchantType | undefined;
-  if (!merchantType) throw new MerchantTypeMissingError();
-
-  const application = await db.kycApplication.findUnique({ where: { merchantProfileId } });
-  if (!application) throw new ApplicationNotFoundError();
-
-  if (!application.formVersionId) throw new FormNotFoundError();
-
-  const field = await db.kycFieldDefinition.findUnique({
-    where: { id: fieldId }
-  });
-
-  if (!field || field.formVersionId !== application.formVersionId) {
-    throw new KycValidationError("Invalid field definition.");
-  }
-  if (field.dataType !== "FILE") {
-    throw new KycValidationError("Field is not a FILE type.");
-  }
-  if (field.applicableTypes.length > 0 && !field.applicableTypes.includes(merchantType)) {
-    throw new KycValidationError("Field not applicable to this merchant type.");
+  if (!merchantType) {
+    throw new MerchantTypeMissingError();
   }
 
-  const mimeType = detectMimeType(buffer);
-  if (!mimeType) {
+  const detectedMime = detectMimeType(fileBuffer);
+  const finalMime = detectedMime || mimeType;
+
+  if (!finalMime || !["image/jpeg", "image/png", "application/pdf"].includes(finalMime)) {
     throw new InvalidMagicBytesError();
   }
 
-  const fileRules = field.fileRules as any || {};
-  const maxFiles = fileRules.maxFiles || 1;
-  const maxSize = fileRules.maxSize || 5 * 1024 * 1024; // Default 5MB
+  
 
-  if (buffer.length > maxSize) {
-    throw new KycValidationError("File exceeds maximum allowed size.");
-  }
+  
+  const sanitizedFilename = originalFilename.replace(/[^a-zA-Z0-9.\-_]/g, '_').replace(/\.\./g, '_');
+  const storageKey = `merchant/${merchantProfileId}/kyc/${crypto.randomUUID()}-${sanitizedFilename}`;
+
 
   const docRecord = await db.$transaction(async (tx) => {
-    // Acquire row-level lock on the application FIRST before making any state-dependent mutation decision
-    const lockedApp = await tx.kycApplication.update({
-      where: { id: application.id },
-      data: { updatedAt: new Date() }
+    const application = await tx.kycApplication.findUnique({
+      where: { merchantProfileId },
+      include: { cycles: { where: { isCurrentCycle: true } } }
     });
 
-    if (lockedApp.status === "UNDER_REVIEW" || lockedApp.status === "APPROVED") {
-      throw new KycStateError(`Cannot modify application in ${lockedApp.status} state.`);
+    if (!application) throw new ApplicationNotFoundError();
+    const cycle = resolveCurrentCycle(application);
+
+    const field = await tx.kycFieldDefinition.findUnique({
+      where: { id: fieldDefinitionId }
+    });
+
+    if (!field || field.formVersionId !== cycle.formVersionId) {
+      throw new KycValidationError("Invalid field definition for this application version.");
     }
-    if (lockedApp.status === "REJECTED" && !lockedApp.allowResubmission) {
+
+    
+    if (field.dataType !== "FILE") {
+      throw new KycValidationError("Field is not a file upload field.");
+    }
+
+    let maxFiles = 5;
+    let maxSize = 10 * 1024 * 1024;
+    if (field.fileRules && typeof field.fileRules === 'object') {
+      const rules = field.fileRules as any;
+      if (rules.maxFiles !== undefined) maxFiles = rules.maxFiles;
+      if (rules.maxSize !== undefined) maxSize = rules.maxSize;
+    }
+
+    if (fileBuffer.length > maxSize) {
+      throw new KycValidationError(`File exceeds the maximum allowed size for this field.`);
+    }
+    
+
+    if (field.applicableTypes.length > 0 && !field.applicableTypes.includes(merchantType)) {
+      throw new KycValidationError(`Field ${field.key} is not applicable to this merchant type.`);
+    }
+
+    const lockedApp = await tx.kycApplication.update({
+      where: { id: application.id },
+      data: { updatedAt: new Date() },
+      include: { cycles: { where: { isCurrentCycle: true } } }
+    });
+    
+    const lockedCycle = resolveCurrentCycle(lockedApp);
+
+    if (lockedCycle.status === "UNDER_REVIEW" || lockedCycle.status === "APPROVED") {
+      throw new KycStateError(`Cannot modify application in ${lockedCycle.status} state.`);
+    }
+    if (lockedCycle.status === "REJECTED" && !lockedCycle.allowResubmission) {
       throw new KycStateError("Resubmission is not allowed for this application.");
     }
 
-    const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
-    const count = await tx.kycDocument.count({
+    const existingDocs = await tx.kycDocument.count({
       where: {
-        applicationId: lockedApp.id,
-        fieldDefinitionId: field.id,
-        OR: [
-          { status: "UPLOADED" },
-          { status: "PENDING", createdAt: { gte: fiveMinsAgo } }
-        ]
+        submissionCycleId: lockedCycle.id,
+        fieldDefinitionId: fieldDefinitionId
       }
     });
 
-    if (count >= maxFiles) {
+    if (existingDocs >= maxFiles) {
       throw new KycStateError("Maximum number of files exceeded for this field.");
     }
 
-    const uuid = crypto.randomUUID();
-    const storageKey = `kyc_documents/${application.id}/${uuid}`;
-
-    return tx.kycDocument.create({
+    return await tx.kycDocument.create({
       data: {
-        applicationId: application.id,
-        fieldDefinitionId: field.id,
+        submissionCycleId: lockedCycle.id,
+        fieldDefinitionId,
         storageKey,
-        originalFilename: originalFilename.substring(0, 255), // Sanitize max length
-        mimeType,
-        sizeBytes: buffer.length,
+        originalFilename,
+        mimeType: finalMime,
+        sizeBytes: fileBuffer.length,
         status: "PENDING"
       }
     });
   });
 
-  // Perform physical storage write
+  let physicalUploadSucceeded = false;
   try {
-    await storageProvider.put(docRecord.storageKey, buffer, docRecord.mimeType);
-  } catch (error) {
-    // We explicitly do NOT delete the DB record here. We leave it as PENDING.
-    throw error;
+    await storageProvider.put(storageKey, fileBuffer);
+    physicalUploadSucceeded = true;
+    
+    await db.kycDocument.update({
+      where: { id: docRecord.id },
+      data: { status: "UPLOADED" }
+    });
+    
+    return docRecord;
+  } catch (e: any) {
+    if (physicalUploadSucceeded) {
+      await storageProvider.delete(storageKey).catch(console.error);
+    }
+    await db.kycDocument.delete({ where: { id: docRecord.id } }).catch(console.error);
+    throw e;
   }
-
-  // Update DB to UPLOADED
-  const updatedDoc = await db.kycDocument.update({
-    where: { id: docRecord.id },
-    data: { status: "UPLOADED" }
-  });
-
-  return {
-    id: updatedDoc.id,
-    originalFilename: updatedDoc.originalFilename,
-    mimeType: updatedDoc.mimeType,
-    sizeBytes: updatedDoc.sizeBytes,
-    createdAt: updatedDoc.createdAt
-  };
 }
 
 export async function listKycDocuments(merchantProfileId: string) {
   const application = await db.kycApplication.findUnique({
     where: { merchantProfileId },
-    select: { id: true }
+    include: { cycles: { where: { isCurrentCycle: true } } }
   });
 
   if (!application) return [];
+  if (!application.cycles || application.cycles.length === 0) return [];
+  const cycle = resolveCurrentCycle(application);
 
   const docs = await db.kycDocument.findMany({
-    where: { applicationId: application.id },
+    where: { submissionCycleId: cycle.id },
     select: {
       id: true,
       fieldDefinitionId: true,
@@ -410,14 +466,15 @@ export async function listKycDocuments(merchantProfileId: string) {
 export async function getKycDocumentForDownload(merchantProfileId: string, documentId: string) {
   const application = await db.kycApplication.findUnique({
     where: { merchantProfileId },
-    select: { id: true }
+    include: { cycles: { where: { isCurrentCycle: true } } }
   });
   if (!application) throw new ApplicationNotFoundError();
+  const cycle = resolveCurrentCycle(application);
 
   const doc = await db.kycDocument.findUnique({
     where: {
       id: documentId,
-      applicationId: application.id
+      submissionCycleId: cycle.id
     }
   });
 
@@ -436,32 +493,34 @@ export async function deleteKycDocument(merchantProfileId: string, documentId: s
   const docRecord = await db.$transaction(async (tx) => {
     let application = await tx.kycApplication.findUnique({
       where: { merchantProfileId },
-      select: { id: true, status: true, allowResubmission: true }
+      include: { cycles: { where: { isCurrentCycle: true } } }
     });
     if (!application) throw new ApplicationNotFoundError();
 
     application = await tx.kycApplication.update({
       where: { id: application.id },
-      data: { updatedAt: new Date() }
+      data: { updatedAt: new Date() },
+      include: { cycles: { where: { isCurrentCycle: true } } }
     });
 
-    if (application.status === "UNDER_REVIEW" || application.status === "APPROVED") {
-      throw new KycStateError(`Cannot modify application in ${application.status} state.`);
+    const cycle = resolveCurrentCycle(application);
+
+    if (cycle.status === "UNDER_REVIEW" || cycle.status === "APPROVED") {
+      throw new KycStateError(`Cannot modify application in ${cycle.status} state.`);
     }
-    if (application.status === "REJECTED" && !application.allowResubmission) {
+    if (cycle.status === "REJECTED" && !cycle.allowResubmission) {
       throw new KycStateError("Resubmission is not allowed for this application.");
     }
 
     const doc = await tx.kycDocument.findUnique({
       where: {
         id: documentId,
-        applicationId: application.id
+        submissionCycleId: cycle.id
       }
     });
 
     if (!doc) throw new KycValidationError("Document not found");
 
-    // DB Delete First
     await tx.kycDocument.delete({
       where: { id: doc.id }
     });
@@ -469,7 +528,6 @@ export async function deleteKycDocument(merchantProfileId: string, documentId: s
     return doc;
   });
 
-  // Storage Delete Second
   await storageProvider.delete(docRecord.storageKey);
 }
 
@@ -482,36 +540,39 @@ export async function submitKycApplication(merchantProfileId: string) {
   if (!merchantType) throw new MerchantTypeMissingError();
 
   return await db.$transaction(async (tx) => {
-    let application = await tx.kycApplication.findUnique({ where: { merchantProfileId } });
+    let application = await tx.kycApplication.findUnique({ 
+      where: { merchantProfileId },
+      include: { cycles: { where: { isCurrentCycle: true } } }
+    });
     if (!application) throw new ApplicationNotFoundError();
 
-    // Acquire parent-row lock
     application = await tx.kycApplication.update({
       where: { id: application.id },
-      data: { updatedAt: new Date() }
+      data: { updatedAt: new Date() },
+      include: { cycles: { where: { isCurrentCycle: true } } }
     });
 
-    if (application.status === "UNDER_REVIEW" || application.status === "APPROVED") {
-      throw new KycStateError(`Cannot submit application in ${application.status} state.`);
+    const cycle = resolveCurrentCycle(application);
+
+    if (cycle.status === "UNDER_REVIEW" || cycle.status === "APPROVED") {
+      throw new KycStateError(`Cannot submit application in ${cycle.status} state.`);
     }
-    if (application.status === "REJECTED" && !application.allowResubmission) {
+    if (cycle.status === "REJECTED" && !cycle.allowResubmission) {
       throw new KycStateError("Resubmission is not allowed for this application.");
     }
-    if (!application.formVersionId) throw new FormNotFoundError();
 
     const fields = await tx.kycFieldDefinition.findMany({
-      where: { formVersionId: application.formVersionId }
+      where: { formVersionId: cycle.formVersionId }
     });
 
-    // Filter by applicableTypes
     const applicableFields = fields.filter(f => f.applicableTypes.length === 0 || f.applicableTypes.includes(merchantType));
 
     const answers = await tx.kycAnswer.findMany({
-      where: { applicationId: application.id }
+      where: { submissionCycleId: cycle.id }
     });
 
     const documents = await tx.kycDocument.findMany({
-      where: { applicationId: application.id, status: "UPLOADED" }
+      where: { submissionCycleId: cycle.id, status: "UPLOADED" }
     });
 
     const answerMap = new Map(answers.map(a => [a.fieldDefinitionId, a.value]));
@@ -541,7 +602,7 @@ export async function submitKycApplication(merchantProfileId: string) {
              errors.push({ fieldKey: field.key, message: "Invalid validation rule configuration." });
              continue;
           }
-        } catch (e) {
+        } catch (e: any) {
           errors.push({ fieldKey: field.key, message: "Invalid validation rule configuration." });
           continue;
         }
@@ -600,10 +661,10 @@ export async function submitKycApplication(merchantProfileId: string) {
       throw new KycCompletenessError(errors);
     }
 
-    const previousStatus = application.status;
+    const previousStatus = cycle.status;
 
-    const updatedApp = await tx.kycApplication.update({
-      where: { id: application.id },
+    const updatedCycle = await tx.kycSubmissionCycle.update({
+      where: { id: cycle.id },
       data: {
         status: "UNDER_REVIEW",
         submittedAt: new Date()
@@ -623,6 +684,10 @@ export async function submitKycApplication(merchantProfileId: string) {
       }
     }, tx);
 
-    return updatedApp;
+    return updatedCycle;
   });
 }
+
+
+
+

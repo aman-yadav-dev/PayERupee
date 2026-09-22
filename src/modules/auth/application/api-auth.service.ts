@@ -36,7 +36,12 @@ export async function authenticateApiKey(authHeader: string | null): Promise<str
         select: {
           accountStatus: true,
           kycApplication: {
-            select: { status: true }
+            select: {
+              cycles: {
+                where: { isCurrentCycle: true },
+                select: { status: true }
+              }
+            }
           }
         }
       }
@@ -59,7 +64,8 @@ export async function authenticateApiKey(authHeader: string | null): Promise<str
     throw new ApiForbiddenError("Merchant account is not active");
   }
 
-  if (apiKey.merchantProfile.kycApplication?.status !== "APPROVED") {
+  const currentCycle = apiKey.merchantProfile.kycApplication?.cycles?.[0];
+  if (currentCycle?.status !== "APPROVED") {
     throw new ApiForbiddenError("Merchant KYC is not approved");
   }
 
