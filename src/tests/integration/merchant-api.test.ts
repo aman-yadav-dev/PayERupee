@@ -40,7 +40,10 @@ describe("Merchant UI APIs (Tenant Isolation)", () => {
       data: { id: mockMerchantIdA, userId: mockUserIdA, businessName: "Merchant A", accountStatus: "ACTIVE" }
     });
     await db.kycApplication.create({
-      data: { merchantProfileId: mockMerchantIdA, status: "APPROVED" }
+      data: { merchantProfileId: mockMerchantIdA,
+          cycles: { create: { cycleNumber: 1, formVersion: { create: { status: "PUBLISHED", versionNumber: 1, form: { create: { name: "Test Form" } } } }, status: "APPROVED", isCurrentCycle: true } }
+    },
+        include: { cycles: true }
     });
     await db.ledgerAccount.create({
       data: { id: mockLedgerAccountIdA, merchantProfileId: mockMerchantIdA, type: "MERCHANT_LIABILITY", currency: "INR" }
@@ -63,7 +66,10 @@ describe("Merchant UI APIs (Tenant Isolation)", () => {
       data: { id: mockMerchantIdB, userId: mockUserIdB, businessName: "Merchant B", accountStatus: "ACTIVE" }
     });
     await db.kycApplication.create({
-      data: { merchantProfileId: mockMerchantIdB, status: "APPROVED" }
+      data: { merchantProfileId: mockMerchantIdB,
+          cycles: { create: { cycleNumber: 1, formVersion: { create: { status: "PUBLISHED", versionNumber: 1, form: { create: { name: "Test Form" } } } }, status: "APPROVED", isCurrentCycle: true } }
+    },
+        include: { cycles: true }
     });
     await db.ledgerAccount.create({
       data: { id: mockLedgerAccountIdB, merchantProfileId: mockMerchantIdB, type: "MERCHANT_LIABILITY", currency: "INR" }
@@ -210,7 +216,10 @@ describe("Merchant UI APIs (Tenant Isolation)", () => {
       });
       if (kycStatus) {
         await db.kycApplication.create({
-          data: { merchantProfileId: mId, status: kycStatus as any }
+          data: { merchantProfileId: mId,
+              cycles: { create: { cycleNumber: 1, formVersion: { create: { status: "PUBLISHED", versionNumber: 1, form: { create: { name: "Test Form" } } } }, status: kycStatus as any, isCurrentCycle: true } }
+        },
+            include: { cycles: true }
         });
       }
       return uId;

@@ -48,7 +48,15 @@ export async function requireMerchantContext(req: NextRequest | Request) {
     select: {
       id: true,
       accountStatus: true,
-      kycApplication: { select: { status: true } }
+      kycApplication: { 
+        include: {
+          cycles: {
+            where: { isCurrentCycle: true },
+            take: 1,
+            select: { status: true }
+          }
+        }
+      }
     }
   });
 
@@ -60,7 +68,7 @@ export async function requireMerchantContext(req: NextRequest | Request) {
     userId: session.user.id,
     merchantProfileId: merchantProfile.id,
     accountStatus: merchantProfile.accountStatus,
-    kycStatus: merchantProfile.kycApplication?.status || null
+    kycStatus: merchantProfile.kycApplication?.cycles?.[0]?.status || null
   };
 }
 

@@ -246,3 +246,91 @@ If you did not request this reset, you can safely ignore this email. Your passwo
     text: getTextShell(textContent),
   });
 }
+import { z } from "zod";
+
+export const emailOutboxPayloadSchema = z.discriminatedUnion("templateId", [
+  z.object({
+    to: z.string().email(),
+    subject: z.string().min(1),
+    templateId: z.literal("GENERIC_NOTIFICATION"),
+    templateVariables: z.object({
+      message: z.string()
+    })
+  }),
+  z.object({
+    to: z.string().email(),
+    subject: z.string().min(1),
+    templateId: z.literal("KYC_SUBMITTED"),
+    templateVariables: z.object({
+      name: z.string(),
+      isResubmission: z.boolean()
+    })
+  }),
+  z.object({
+    to: z.string().email(),
+    subject: z.string().min(1),
+    templateId: z.literal("KYC_REJECTED"),
+    templateVariables: z.object({
+      name: z.string(),
+      reason: z.string()
+    })
+  }),
+  z.object({
+    to: z.string().email(),
+    subject: z.string().min(1),
+    templateId: z.literal("KYC_APPROVED"),
+    templateVariables: z.object({
+      name: z.string()
+    })
+  }),
+  z.object({
+    to: z.string().email(),
+    subject: z.string().min(1),
+    templateId: z.literal("TEST_TEMPLATE"),
+    templateVariables: z.object({}).optional()
+  })
+]);
+
+export type EmailOutboxPayload = z.infer<typeof emailOutboxPayloadSchema>;
+
+export async function dispatchOutboxEmail(payload: EmailOutboxPayload) {
+  let htmlContent = "";
+  let textContent = "";
+
+  if (payload.templateId === "GENERIC_NOTIFICATION") {
+    const safeMessage = escapeHtml(payload.templateVariables.message);
+    htmlContent = '<p style="margin:0;font-size:15px;color:#374151;">' + safeMessage + '</p>';
+    textContent = payload.templateVariables.message;
+  } else if (payload.templateId === "KYC_SUBMITTED") {
+    const safeName = escapeHtml(payload.templateVariables.name);
+    const subType = payload.templateVariables.isResubmission ? "resubmitted" : "submitted";
+    htmlContent = `<p>Hi ${safeName},</p><p>Your KYC application has been ${subType} and is currently under review. Please note this does not imply approval.</p>`;
+    textContent = `Hi ${payload.templateVariables.name},
+Your KYC application has been ${subType} and is currently under review. Please note this does not imply approval.`;
+  } else if (payload.templateId === "KYC_REJECTED") {
+    const safeName = escapeHtml(payload.templateVariables.name);
+    const safeReason = escapeHtml(payload.templateVariables.reason);
+    htmlContent = `<p>Hi ${safeName},</p><p>Your KYC application has been rejected.</p><p>Reason: ${safeReason}</p>`;
+    textContent = `Hi ${payload.templateVariables.name},
+Your KYC application has been rejected.
+Reason: ${payload.templateVariables.reason}`;
+  } else if (payload.templateId === "KYC_APPROVED") {
+    const safeName = escapeHtml(payload.templateVariables.name);
+    htmlContent = `<p>Hi ${safeName},</p><p>Your KYC application has been approved.</p>`;
+    textContent = `Hi ${payload.templateVariables.name},
+Your KYC application has been approved.`;
+  } else if (payload.templateId === "TEST_TEMPLATE") {
+    htmlContent = "<p>Test Email</p>";
+    textContent = "Test Email";
+  } else {
+    // Should be unreachable due to Zod schema, but keeping for safety
+    throw new Error("Unsupported templateId");
+  }
+
+  await sendEmail({
+    to: payload.to,
+    subject: payload.subject,
+    html: getEmailShell(htmlContent),
+    text: getTextShell(textContent),
+  });
+}

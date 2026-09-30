@@ -1,15 +1,26 @@
-﻿import React from "react";
+import React from "react";
+import { redirect } from "next/navigation";
+import { headers } from "next/headers";
+import { getResolvedAuthDestination } from "@/modules/auth/application/destination-loader.service";
+import { requireMerchantContext } from "@/modules/auth/application/session-auth.service";
+import { db } from "@/infrastructure/database/db";
+import StartKycClient from "./StartKycClient";
 
-export default function KycStartPage() {
-  return (
-    <div className="flex flex-col items-center justify-center min-h-[50vh] p-8 text-center">
-      <h1 className="text-2xl font-bold mb-4">KYC Setup Required</h1>
-      <p className="text-gray-600 mb-6">
-        Before you can access the merchant dashboard, you must complete your business verification (KYC).
-      </p>
-      <div className="p-4 bg-amber-50 text-amber-800 rounded-md">
-        This is a temporary placeholder for Feature A1. The actual KYC application workflow will be implemented in Feature B.
-      </div>
-    </div>
-  );
+export default async function KycStartPage() {
+  const destination = await getResolvedAuthDestination();
+  
+  if (destination !== "/kyc/start") {
+    redirect(destination);
+  }
+
+  // Determine if application exists for "Resume" vs "Start" wording
+  const req = new Request("http://localhost", { headers: await headers() });
+  const context = await requireMerchantContext(req as any);
+  
+  const application = await db.kycApplication.findUnique({
+    where: { merchantProfileId: context.merchantProfileId },
+    include: { merchantProfile: { select: { merchantType: true } } }
+  });
+
+  return <StartKycClient hasApplication={!!application} currentMerchantType={application?.merchantProfile?.merchantType || undefined} />;
 }

@@ -5,7 +5,8 @@ import {
   MerchantTypeMissingError, 
   FormNotFoundError, 
   KycStateError, 
-  KycValidationError 
+  KycValidationError,
+  ApplicationNotFoundError
 } from "@/modules/merchant/application/merchant-kyc.service";
 import { z } from "zod";
 
@@ -51,7 +52,7 @@ export async function PUT(req: NextRequest) {
     if (error instanceof KycStateError) {
       return NextResponse.json({ success: false, error: error.message }, { status: 409 });
     }
-    if (error instanceof FormNotFoundError) {
+    if (error instanceof FormNotFoundError || error instanceof ApplicationNotFoundError) {
       return NextResponse.json({ success: false, error: error.message }, { status: 404 });
     }
     console.error("[PUT /api/v1/merchant/kyc/answers]", error);

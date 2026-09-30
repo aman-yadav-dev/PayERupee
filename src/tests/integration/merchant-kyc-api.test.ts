@@ -65,7 +65,10 @@ describe("Merchant KYC APIs (Phases C1 & C2)", () => {
       data: { id: mockMerchantIdA, userId: mockUserIdA, businessName: "Merchant A", accountStatus: "ACTIVE", merchantType: "COMPANY" }
     });
     await db.kycApplication.create({
-      data: { merchantProfileId: mockMerchantIdA, status: "PENDING_SUBMISSION", allowResubmission: true, formVersionId: publishedFormId }
+      data: { merchantProfileId: mockMerchantIdA,
+          cycles: { create: { cycleNumber: 1, formVersionId: publishedFormId, status: "PENDING_SUBMISSION", isCurrentCycle: true, allowResubmission: true } }
+    },
+        include: { cycles: true }
     });
 
     await db.user.create({ data: { id: mockUserIdB, name: "User B", email: "kyc_b@test.com" } });
@@ -210,13 +213,33 @@ describe("Merchant KYC APIs (Phases C1 & C2)", () => {
       body: JSON.stringify({ answers: [{ fieldId: fields.pan!.id, value: "ABCDE1234F" }] }) 
     });
     const res = await putKycAnswers(req);
-    expect(res.status).toBe(200);
+    // Should fail with 404 because no application exists
+    expect(res.status).toBe(404);
 
-    const body = await res.json();
+    const errorBody = await res.json();
+    expect(errorBody.error).toBe("Application not found.");
+
+    // Explicitly initialize the application
+    const initReq = new NextRequest("http://localhost/api/v1/merchant/kyc/application", {
+      method: "POST",
+      body: JSON.stringify({ merchantType: "INDIVIDUAL" })
+    });
+    const { POST: initializeKycApplicationEndpoint } = await import("@/app/api/v1/merchant/kyc/application/route");
+    const initRes = await initializeKycApplicationEndpoint(initReq);
+    expect(initRes.status).toBe(200);
+
+    // Now save should succeed
+    const req2 = new NextRequest("http://localhost/api/v1/merchant/kyc/answers", { 
+      method: "PUT", 
+      body: JSON.stringify({ answers: [{ fieldId: fields.pan!.id, value: "ABCDE1234F" }] }) 
+    });
+    const res2 = await putKycAnswers(req2);
+    expect(res2.status).toBe(200);
+
+    const body = await res2.json();
     expect(body.success).toBe(true);
     expect(body.data.status).toBe("PENDING_SUBMISSION");
     expect(body.data.savedCount).toBe(1);
-
     const getReq = new NextRequest("http://localhost/api/v1/merchant/kyc/application");
     const getRes = await getKycApplication(getReq);
     const getBody = await getRes.json();
@@ -285,6 +308,14 @@ describe("Merchant KYC APIs (Phases C1 & C2)", () => {
     mockSession(mockUserIdB); 
     const fields = await getFields();
     
+    // Explicitly initialize the application first
+    const initReq = new NextRequest("http://localhost/api/v1/merchant/kyc/application", {
+      method: "POST",
+      body: JSON.stringify({ merchantType: "INDIVIDUAL" })
+    });
+    const { POST: initializeKycApplicationEndpoint } = await import("@/app/api/v1/merchant/kyc/application/route");
+    await initializeKycApplicationEndpoint(initReq);
+
     const req = new NextRequest("http://localhost/api/v1/merchant/kyc/answers", { 
       method: "PUT", 
       body: JSON.stringify({ answers: [{ fieldId: fields.company!.id, value: "doc.pdf" }] }) 
@@ -319,7 +350,7 @@ describe("Merchant KYC APIs (Phases C1 & C2)", () => {
 
   it("C2: UNDER_REVIEW application cannot be modified", async () => {
     mockSession(mockUserIdA); 
-    await db.kycApplication.update({ where: { merchantProfileId: mockMerchantIdA }, data: { status: "UNDER_REVIEW" } });
+    await db.kycSubmissionCycle.updateMany({ where: { application: { merchantProfileId: mockMerchantIdA }, isCurrentCycle: true }, data: { status: "UNDER_REVIEW" } });
     
     const fields = await getFields();
     const req = new NextRequest("http://localhost/api/v1/merchant/kyc/answers", { 
@@ -332,7 +363,7 @@ describe("Merchant KYC APIs (Phases C1 & C2)", () => {
 
   it("C2: REJECTED + allowResubmission=false cannot be modified", async () => {
     mockSession(mockUserIdA); 
-    await db.kycApplication.update({ where: { merchantProfileId: mockMerchantIdA }, data: { status: "REJECTED", allowResubmission: false } });
+    await db.kycSubmissionCycle.updateMany({ where: { application: { merchantProfileId: mockMerchantIdA }, isCurrentCycle: true }, data: { status: "REJECTED", allowResubmission: false } });
     
     const fields = await getFields();
     const req = new NextRequest("http://localhost/api/v1/merchant/kyc/answers", { 
@@ -343,9 +374,9 @@ describe("Merchant KYC APIs (Phases C1 & C2)", () => {
     expect(res.status).toBe(409); 
   });
 
-  it("C2: REJECTED + allowResubmission=true can be modified", async () => {
+  it("C2: REJECTED + allowResubmission=true cannot be modified directly", async () => {
     mockSession(mockUserIdA); 
-    await db.kycApplication.update({ where: { merchantProfileId: mockMerchantIdA }, data: { status: "REJECTED", allowResubmission: true } });
+    await db.kycSubmissionCycle.updateMany({ where: { application: { merchantProfileId: mockMerchantIdA }, isCurrentCycle: true }, data: { status: "REJECTED", allowResubmission: true } });
     
     const fields = await getFields();
     const req = new NextRequest("http://localhost/api/v1/merchant/kyc/answers", { 
@@ -353,12 +384,12 @@ describe("Merchant KYC APIs (Phases C1 & C2)", () => {
       body: JSON.stringify({ answers: [{ fieldId: fields.pan!.id, value: "A" }] }) 
     });
     const res = await putKycAnswers(req);
-    expect(res.status).toBe(200); 
+    expect(res.status).toBe(409); 
   });
 
   it("C2: APPROVED application cannot be modified", async () => {
     mockSession(mockUserIdA); 
-    await db.kycApplication.update({ where: { merchantProfileId: mockMerchantIdA }, data: { status: "APPROVED" } });
+    await db.kycSubmissionCycle.updateMany({ where: { application: { merchantProfileId: mockMerchantIdA }, isCurrentCycle: true }, data: { status: "APPROVED" } });
     
     const fields = await getFields();
     const req = new NextRequest("http://localhost/api/v1/merchant/kyc/answers", { 
@@ -381,25 +412,10 @@ describe("Merchant KYC APIs (Phases C1 & C2)", () => {
     expect(res.status).toBe(200); // Saves under Merchant A, ignoring mockMerchantIdB
     
     // Verify Merchant B's application is NOT created/modified
-    const appB = await db.kycApplication.findUnique({ where: { merchantProfileId: mockMerchantIdB }, include: { answers: true } });
+    const appB = await db.kycApplication.findUnique({ where: { merchantProfileId: mockMerchantIdB }, include: { cycles: { include: { answers: true }, where: { isCurrentCycle: true }, take: 1 } } });
     expect(appB).toBeNull();
   });
 
-  it("C2: existing application with formVersionId = null is rejected", async () => {
-    mockSession(mockUserIdB);
-    // Force Merchant B to have an application with no formVersionId
-    await db.kycApplication.create({
-      data: { merchantProfileId: mockMerchantIdB, status: "PENDING_SUBMISSION", formVersionId: null }
-    });
-
-    const fields = await getFields();
-    const req = new NextRequest("http://localhost/api/v1/merchant/kyc/answers", { 
-      method: "PUT", 
-      body: JSON.stringify({ answers: [{ fieldId: fields.pan!.id, value: "A" }] }) 
-    });
-    const res = await putKycAnswers(req);
-    expect(res.status).toBe(404); // FormNotFoundError
-  });
 
   it("C2: string pretending to be a number is rejected (strict NUMBER validation)", async () => {
     mockSession(mockUserIdA); 

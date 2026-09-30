@@ -98,8 +98,8 @@ describe("Google Auth Dispatcher (Slice 1 - /auth-sync)", () => {
         accountStatus: AccountStatus.ACTIVE,
         kycApplication: {
           create: {
-            status: KycStatus.APPROVED,
-          },
+            cycles: { create: { cycleNumber: 1, formVersion: { create: { status: "PUBLISHED", versionNumber: 1, form: { create: { name: "Test Form" } } } }, status: KycStatus.APPROVED, isCurrentCycle: true } }
+        },
         },
       },
     });
@@ -115,8 +115,8 @@ describe("Google Auth Dispatcher (Slice 1 - /auth-sync)", () => {
         accountStatus: AccountStatus.PENDING,
         kycApplication: {
           create: {
-            status: KycStatus.PENDING_SUBMISSION,
-          },
+            cycles: { create: { cycleNumber: 1, formVersion: { create: { status: "PUBLISHED", versionNumber: 1, form: { create: { name: "Test Form" } } } }, status: KycStatus.PENDING_SUBMISSION, isCurrentCycle: true } }
+        },
         },
       },
     });
@@ -132,8 +132,8 @@ describe("Google Auth Dispatcher (Slice 1 - /auth-sync)", () => {
         accountStatus: AccountStatus.PENDING,
         kycApplication: {
           create: {
-            status: KycStatus.UNDER_REVIEW,
-          },
+            cycles: { create: { cycleNumber: 1, formVersion: { create: { status: "PUBLISHED", versionNumber: 1, form: { create: { name: "Test Form" } } } }, status: KycStatus.UNDER_REVIEW, isCurrentCycle: true } }
+        },
         },
       },
     });
@@ -149,8 +149,8 @@ describe("Google Auth Dispatcher (Slice 1 - /auth-sync)", () => {
         accountStatus: AccountStatus.PENDING,
         kycApplication: {
           create: {
-            status: KycStatus.REJECTED,
-          },
+            cycles: { create: { cycleNumber: 1, formVersion: { create: { status: "PUBLISHED", versionNumber: 1, form: { create: { name: "Test Form" } } } }, status: KycStatus.REJECTED, isCurrentCycle: true } }
+        },
         },
       },
     });
@@ -166,8 +166,8 @@ describe("Google Auth Dispatcher (Slice 1 - /auth-sync)", () => {
         accountStatus: AccountStatus.PENDING,
         kycApplication: {
           create: {
-            status: KycStatus.APPROVED,
-          },
+            cycles: { create: { cycleNumber: 1, formVersion: { create: { status: "PUBLISHED", versionNumber: 1, form: { create: { name: "Test Form" } } } }, status: KycStatus.APPROVED, isCurrentCycle: true } }
+        },
         },
       },
     });

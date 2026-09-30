@@ -17,32 +17,54 @@ export async function listKycApplications(page: number = 1, limit: number = 20, 
     if (!Object.values(KycStatus).includes(status as KycStatus)) {
       throw new KycValidationError("Invalid status filter");
     }
-    where.status = status as KycStatus;
+    where.cycles = {
+      some: {
+        isCurrentCycle: true,
+        status: status as KycStatus
+      }
+    };
   }
 
   const [total, applications] = await Promise.all([
     db.kycApplication.count({ where }),
     db.kycApplication.findMany({
       where,
-      orderBy: [
-        { submittedAt: 'desc' },
-        { createdAt: 'desc' }
-      ],
+      orderBy: { createdAt: 'desc' },
       skip: (page - 1) * limit,
       take: limit,
       select: {
         id: true,
         merchantProfileId: true,
-        status: true,
-        submittedAt: true,
-        reviewedAt: true,
-        allowResubmission: true
+        merchantProfile: { select: { user: { select: { name: true, email: true } } } },
+        cycles: {
+          where: { isCurrentCycle: true },
+          take: 1,
+          select: {
+            status: true,
+            submittedAt: true,
+            reviewedAt: true,
+            allowResubmission: true
+          }
+        }
       }
     })
   ]);
 
+  const mapped = applications.map(app => {
+    const active = app.cycles[0];
+    return {
+      id: app.id,
+      merchantProfileId: app.merchantProfileId,
+      status: active?.status || KycStatus.PENDING_SUBMISSION,
+      submittedAt: active?.submittedAt || null,
+      reviewedAt: active?.reviewedAt || null,
+      allowResubmission: active?.allowResubmission || false,
+      merchantProfile: app.merchantProfile
+    };
+  });
+
   return {
-    data: applications,
+    data: mapped,
     meta: {
       total,
       page,
@@ -72,21 +94,27 @@ export async function getKycApplicationDetail(applicationId: string) {
           }
         }
       },
-      formVersion: {
+      cycles: {
+        where: { isCurrentCycle: true },
+        take: 1,
         include: {
-          fields: true
-        }
-      },
-      answers: true,
-      documents: {
-        select: {
-          id: true,
-          fieldDefinitionId: true,
-          status: true,
-          originalFilename: true,
-          mimeType: true,
-          createdAt: true,
-          updatedAt: true
+          formVersion: {
+            include: {
+              fields: true
+            }
+          },
+          answers: true,
+          documents: {
+            select: {
+              id: true,
+              fieldDefinitionId: true,
+              status: true,
+              originalFilename: true,
+              mimeType: true,
+              createdAt: true,
+              updatedAt: true
+            }
+          }
         }
       }
     }
@@ -96,7 +124,15 @@ export async function getKycApplicationDetail(applicationId: string) {
     throw new ApplicationNotFoundError();
   }
 
-  return application;
+  const active = application.cycles[0];
+  
+  return {
+    ...application,
+    status: active?.status || KycStatus.PENDING_SUBMISSION,
+    formVersion: active?.formVersion,
+    answers: active?.answers || [],
+    documents: active?.documents || []
+  };
 }
 
 /**
@@ -110,10 +146,11 @@ export async function downloadAdminKycDocument(applicationId: string, documentId
   if (!application) throw new ApplicationNotFoundError();
 
   const doc = await db.kycDocument.findUnique({
-    where: { id: documentId }
+    where: { id: documentId },
+    include: { cycle: true }
   });
 
-  if (!doc || doc.applicationId !== applicationId) {
+  if (!doc || doc.cycle?.applicationId !== applicationId) {
     throw new KycValidationError("Document not found or mismatch");
   }
 
@@ -134,26 +171,37 @@ export async function downloadAdminKycDocument(applicationId: string, documentId
  */
 export async function approveKycApplication(adminUserId: string, applicationId: string) {
   return await db.$transaction(async (tx) => {
-    let application = await tx.kycApplication.findUnique({
-      where: { id: applicationId }
+    // Acquire parent-row lock
+    const application = await tx.kycApplication.update({
+      where: { id: applicationId },
+      data: { updatedAt: new Date() },
+      include: { 
+        merchantProfile: { 
+          include: { user: { include: { notificationPreference: true } } } 
+        } 
+      }
     });
 
     if (!application) {
       throw new ApplicationNotFoundError();
     }
 
-    // Acquire parent-row lock
-    application = await tx.kycApplication.update({
-      where: { id: applicationId },
-      data: { updatedAt: new Date() }
+    const activeCycles = await tx.kycSubmissionCycle.findMany({
+      where: { applicationId, isCurrentCycle: true }
     });
 
-    if (application.status !== KycStatus.UNDER_REVIEW) {
-      throw new KycStateError(`Cannot approve application in ${application.status} state.`);
+    if (activeCycles.length !== 1) {
+      throw new KycStateError("Could not resolve current KYC submission cycle.");
     }
 
-    const updatedApp = await tx.kycApplication.update({
-      where: { id: applicationId },
+    const currentCycle = activeCycles.pop()!;
+
+    if (currentCycle.status !== KycStatus.UNDER_REVIEW) {
+      throw new KycStateError(`Cannot approve application in ${currentCycle.status} state.`);
+    }
+
+    const updatedCycle = await tx.kycSubmissionCycle.update({
+      where: { id: currentCycle.id },
       data: {
         status: KycStatus.APPROVED,
         reviewerId: adminUserId,
@@ -168,12 +216,33 @@ export async function approveKycApplication(adminUserId: string, applicationId: 
       entityId: applicationId,
       action: AuditAction.APPROVE,
       metadata: {
+        cycleId: currentCycle.id,
+        cycleNumber: currentCycle.cycleNumber,
         previousStatus: KycStatus.UNDER_REVIEW,
         newStatus: KycStatus.APPROVED
       }
     }, tx);
 
-    return updatedApp;
+    const kycEmailsEnabled = application.merchantProfile?.user?.notificationPreference?.kycEmailsEnabled ?? true;
+    const userEmail = application.merchantProfile?.user?.email;
+    const userName = application.merchantProfile?.user?.name;
+
+    if (kycEmailsEnabled && userEmail && userName) {
+      await tx.outboxEvent.create({
+        data: {
+          referenceType: "EMAIL_DISPATCH",
+          referenceId: `KYC_APPROVE_${application.id}_v${currentCycle.cycleNumber}`,
+          payload: {
+            to: userEmail,
+            subject: "KYC Application Approved",
+            templateId: "KYC_APPROVED",
+            templateVariables: { name: userName }
+          }
+        }
+      });
+    }
+
+    return updatedCycle;
   });
 }
 
@@ -197,26 +266,37 @@ export async function rejectKycApplication(
   }
 
   return await db.$transaction(async (tx) => {
-    let application = await tx.kycApplication.findUnique({
-      where: { id: applicationId }
+    // Acquire parent-row lock
+    const application = await tx.kycApplication.update({
+      where: { id: applicationId },
+      data: { updatedAt: new Date() },
+      include: { 
+        merchantProfile: { 
+          include: { user: { include: { notificationPreference: true } } } 
+        } 
+      }
     });
 
     if (!application) {
       throw new ApplicationNotFoundError();
     }
 
-    // Acquire parent-row lock
-    application = await tx.kycApplication.update({
-      where: { id: applicationId },
-      data: { updatedAt: new Date() }
+    const activeCycles = await tx.kycSubmissionCycle.findMany({
+      where: { applicationId, isCurrentCycle: true }
     });
 
-    if (application.status !== KycStatus.UNDER_REVIEW) {
-      throw new KycStateError(`Cannot reject application in ${application.status} state.`);
+    if (activeCycles.length !== 1) {
+      throw new KycStateError("Could not resolve current KYC submission cycle.");
     }
 
-    const updatedApp = await tx.kycApplication.update({
-      where: { id: applicationId },
+    const currentCycle = activeCycles.pop()!;
+
+    if (currentCycle.status !== KycStatus.UNDER_REVIEW) {
+      throw new KycStateError(`Cannot reject application in ${currentCycle.status} state.`);
+    }
+
+    const updatedCycle = await tx.kycSubmissionCycle.update({
+      where: { id: currentCycle.id },
       data: {
         status: KycStatus.REJECTED,
         rejectionReason: rejectionReason.trim(),
@@ -233,6 +313,8 @@ export async function rejectKycApplication(
       entityId: applicationId,
       action: AuditAction.REJECT,
       metadata: {
+        cycleId: currentCycle.id,
+        cycleNumber: currentCycle.cycleNumber,
         previousStatus: KycStatus.UNDER_REVIEW,
         newStatus: KycStatus.REJECTED,
         reason: rejectionReason.trim(),
@@ -240,6 +322,43 @@ export async function rejectKycApplication(
       }
     }, tx);
 
-    return updatedApp;
+    const kycEmailsEnabled = application.merchantProfile?.user?.notificationPreference?.kycEmailsEnabled ?? true;
+    const userEmail = application.merchantProfile?.user?.email;
+    const userName = application.merchantProfile?.user?.name;
+
+    if (kycEmailsEnabled && userEmail && userName) {
+      await tx.outboxEvent.create({
+        data: {
+          referenceType: "EMAIL_DISPATCH",
+          referenceId: `KYC_REJECT_${application.id}_v${currentCycle.cycleNumber}`,
+          payload: {
+            to: userEmail,
+            subject: "KYC Application Rejected",
+            templateId: "KYC_REJECTED",
+            templateVariables: { 
+              name: userName,
+              reason: rejectionReason.trim()
+            }
+          }
+        }
+      });
+    }
+
+    return updatedCycle;
+  });
+}
+
+/**
+ * Retrieve the audit history for a KYC application.
+ */
+export async function getKycApplicationAuditHistory(applicationId: string) {
+  return await db.auditLog.findMany({
+    where: {
+      entityType: AuditEntity.KYC_APPLICATION,
+      entityId: applicationId
+    },
+    orderBy: {
+      createdAt: "desc"
+    }
   });
 }

@@ -206,9 +206,23 @@ model User {
   adminBlacklists     Blacklist[]      @relation("AdminBlacklists")
   supportMessages     SupportMessage[] @relation("UserSupportMessages")
   settingsUpdates     SystemSetting[]  @relation("AdminSettingsUpdates")
-  reviewedKycApplications KycApplication[] @relation("AdminKycReviews")
+  reviewedKycCycles KycSubmissionCycle[] @relation("AdminKycReviews")
+  notificationPreference NotificationPreference?
 
   @@map("users")
+}
+
+model NotificationPreference {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  loginEmailsEnabled Boolean  @default(true)
+  kycEmailsEnabled   Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
 }
 
 model Session {
@@ -296,27 +310,44 @@ model MerchantProfile {
 model KycApplication {
   id                String    @id @default(cuid())
   merchantProfileId String    @unique
-  formVersionId     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  merchantProfile MerchantProfile @relation(fields: [merchantProfileId], references: [id], onDelete: Restrict)
+  cycles          KycSubmissionCycle[]
+
+  @@map("kyc_applications")
+}
+
+model KycSubmissionCycle {
+  id                String    @id @default(cuid())
+  applicationId     String
+  formVersionId     String
+  cycleNumber       Int
+  isCurrentCycle    Boolean   @default(true)
   status            KycStatus @default(PENDING_SUBMISSION)
 
   rejectionReason   String?   @db.Text
   allowResubmission Boolean   @default(false)
   reviewerId        String?
 
-  submittedAt DateTime?
-  reviewedAt  DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  submittedAt       DateTime?
+  reviewedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  merchantProfile MerchantProfile @relation(fields: [merchantProfileId], references: [id], onDelete: Restrict)
-  formVersion     KycFormVersion? @relation(fields: [formVersionId], references: [id], onDelete: Restrict)
-  reviewer        User?           @relation("AdminKycReviews", fields: [reviewerId], references: [id], onDelete: SetNull)
+  application       KycApplication  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  formVersion       KycFormVersion  @relation(fields: [formVersionId], references: [id], onDelete: Restrict)
+  reviewer          User?           @relation("AdminKycReviews", fields: [reviewerId], references: [id], onDelete: SetNull)
 
-  answers         KycAnswer[]
-  documents       KycDocument[]
+  answers           KycAnswer[]
+  documents         KycDocument[]
 
-  @@map("kyc_applications")
+  @@unique([applicationId, cycleNumber])
+  @@index([applicationId, isCurrentCycle])
+  @@map("kyc_submission_cycles")
 }
+
 
 model KycForm {
   id          String           @id @default(cuid())
@@ -339,7 +370,7 @@ model KycFormVersion {
   
   form          KycForm            @relation(fields: [formId], references: [id], onDelete: Restrict)
   fields        KycFieldDefinition[]
-  applications  KycApplication[]
+  cycles        KycSubmissionCycle[]
   
   @@unique([formId, versionNumber])
   @@map("kyc_form_versions")
@@ -375,7 +406,7 @@ model KycFieldDefinition {
 
 model KycAnswer {
   id                String             @id @default(cuid())
-  applicationId     String
+  submissionCycleId String
   fieldDefinitionId String
   
   value             Json               
@@ -383,16 +414,16 @@ model KycAnswer {
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 
-  application       KycApplication     @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  cycle             KycSubmissionCycle @relation(fields: [submissionCycleId], references: [id], onDelete: Cascade)
   fieldDefinition   KycFieldDefinition @relation(fields: [fieldDefinitionId], references: [id], onDelete: Restrict)
 
-  @@unique([applicationId, fieldDefinitionId])
+  @@unique([submissionCycleId, fieldDefinitionId])
   @@map("kyc_answers")
 }
 
 model KycDocument {
   id                String               @id @default(cuid())
-  applicationId     String
+  submissionCycleId String
   fieldDefinitionId String
   
   storageKey        String               @unique 
@@ -406,10 +437,10 @@ model KycDocument {
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
 
-  application       KycApplication       @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  cycle             KycSubmissionCycle   @relation(fields: [submissionCycleId], references: [id], onDelete: Cascade)
   fieldDefinition   KycFieldDefinition   @relation(fields: [fieldDefinitionId], references: [id], onDelete: Restrict)
 
-  @@index([applicationId])
+  @@index([submissionCycleId])
   @@index([status, createdAt])
   @@map("kyc_documents")
 }

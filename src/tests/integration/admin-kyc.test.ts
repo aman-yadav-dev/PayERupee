@@ -85,8 +85,12 @@ describe("Admin KYC Workflow (Phase C5)", () => {
         accountStatus: "PENDING",
         kycApplication: {
           create: {
-            status,
-            formVersion: {
+            cycles: {
+              create: {
+                cycleNumber: 1,
+                isCurrentCycle: true,
+                status,
+                formVersion: {
             create: {
               id: "form-" + profileId,
               status: "PUBLISHED",
@@ -109,9 +113,11 @@ describe("Admin KYC Workflow (Phase C5)", () => {
           }
         }
       }
-    });
+    } } });
 
-    const app = await db.kycApplication.findUnique({ where: { merchantProfileId: profileId } });
+    const app = await db.kycApplication.findUnique({ where: { merchantProfileId: profileId },
+        include: { cycles: { where: { isCurrentCycle: true }, take: 1 } }
+    });
     return app!;
   }
 
@@ -173,7 +179,7 @@ describe("Admin KYC Workflow (Phase C5)", () => {
       await db.kycDocument.create({
         data: {
           id: "doc-1",
-          applicationId: app.id,
+          submissionCycleId: app.cycles[0].id,
           fieldDefinitionId: "field-" + app.merchantProfileId,
           storageKey: "SECRET_KEY_123",
           originalFilename: "test.pdf",
@@ -210,7 +216,7 @@ describe("Admin KYC Workflow (Phase C5)", () => {
       await db.kycDocument.create({
         data: {
           id: "doc-2",
-          applicationId: app.id,
+          submissionCycleId: app.cycles[0].id,
           fieldDefinitionId: "field-" + app.merchantProfileId,
           storageKey: "SECRET_KEY_" + Math.random(),
           originalFilename: "real.pdf",
@@ -234,7 +240,7 @@ describe("Admin KYC Workflow (Phase C5)", () => {
       await db.kycDocument.create({
         data: {
           id: "doc-3",
-          applicationId: app1.id, // belongs to app1
+          submissionCycleId: app1.cycles[0].id, // belongs to app1
           fieldDefinitionId: "field-" + app1.merchantProfileId,
           storageKey: "SECRET_KEY_" + Math.random(),
           originalFilename: "real.pdf",
@@ -255,7 +261,7 @@ describe("Admin KYC Workflow (Phase C5)", () => {
       await db.kycDocument.create({
         data: {
           id: "doc-4",
-          applicationId: app.id,
+          submissionCycleId: app.cycles[0].id,
           fieldDefinitionId: "field-" + app.merchantProfileId,
           storageKey: "SECRET_KEY_" + Math.random(),
           originalFilename: "real.pdf",
@@ -280,10 +286,12 @@ describe("Admin KYC Workflow (Phase C5)", () => {
       const res = await approveApp(req, { params: Promise.resolve({ applicationId: app.id }) as any });
       expect(res.status).toBe(200);
 
-      const updated = await db.kycApplication.findUnique({ where: { id: app.id } });
-      expect(updated!.status).toBe("APPROVED");
-      expect(updated!.reviewerId).toBe(adminUserId);
-      expect(updated!.reviewedAt).not.toBeNull();
+      const updated = await db.kycApplication.findUnique({ where: { id: app.id },
+          include: { cycles: { where: { isCurrentCycle: true }, take: 1 } }
+    });
+      expect(updated!.cycles[0].status).toBe("APPROVED");
+      expect(updated!.cycles[0].reviewerId).toBe(adminUserId);
+      expect(updated!.cycles[0].reviewedAt).not.toBeNull();
 
       const profile = await db.merchantProfile.findUnique({ where: { id: updated!.merchantProfileId } });
       expect(profile!.accountStatus).toBe("PENDING"); // MUST NOT BE MODIFIED
@@ -322,11 +330,13 @@ describe("Admin KYC Workflow (Phase C5)", () => {
       const res = await rejectApp(req, { params: Promise.resolve({ applicationId: app.id }) as any });
       expect(res.status).toBe(200);
 
-      const updated = await db.kycApplication.findUnique({ where: { id: app.id } });
-      expect(updated!.status).toBe("REJECTED");
-      expect(updated!.rejectionReason).toBe("Blurry document");
-      expect(updated!.allowResubmission).toBe(true);
-      expect(updated!.reviewerId).toBe(adminUserId);
+      const updated = await db.kycApplication.findUnique({ where: { id: app.id },
+          include: { cycles: { where: { isCurrentCycle: true }, take: 1 } }
+    });
+      expect(updated!.cycles[0].status).toBe("REJECTED");
+      expect(updated!.cycles[0].rejectionReason).toBe("Blurry document");
+      expect(updated!.cycles[0].allowResubmission).toBe(true);
+      expect(updated!.cycles[0].reviewerId).toBe(adminUserId);
 
       // Check audit log
       const audit = await db.auditLog.findFirst({ where: { entityId: app.id, action: "REJECT" } });

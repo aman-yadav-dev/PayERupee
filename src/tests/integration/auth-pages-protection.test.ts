@@ -60,11 +60,7 @@ describe("AUTH-LIFE-2: Existing-Session Auth Page Protection", () => {
           id: profileId,
           userId,
           accountStatus,
-          kycApplication: withKyc ? {
-            create: {
-              status: "APPROVED"
-            }
-          } : undefined
+          kycApplication: withKyc ? { create: { cycles: { create: { cycleNumber: 1, isCurrentCycle: true, status: "APPROVED", formVersion: { create: { status: "PUBLISHED", versionNumber: 1, form: { create: { name: "test-form" } } } } } } } } : undefined
         }
       });
     }

@@ -31,7 +31,10 @@ describe("Merchant API Key Management", () => {
       data: { id: mockMerchantId1, userId: mockUserId1, businessName: "API Mgt Merch 1", accountStatus: "ACTIVE" }
     });
     await db.kycApplication.create({
-      data: { merchantProfileId: mockMerchantId1, status: "APPROVED" }
+      data: { merchantProfileId: mockMerchantId1,
+          cycles: { create: { cycleNumber: 1, formVersion: { create: { status: "PUBLISHED", versionNumber: 1, form: { create: { name: "Test Form" } } } }, status: "APPROVED", isCurrentCycle: true } }
+    },
+        include: { cycles: true }
     });
 
     // Setup Merchant 2 (Active, KYC Approved)
@@ -42,7 +45,10 @@ describe("Merchant API Key Management", () => {
       data: { id: mockMerchantId2, userId: mockUserId2, businessName: "API Mgt Merch 2", accountStatus: "ACTIVE" }
     });
     await db.kycApplication.create({
-      data: { merchantProfileId: mockMerchantId2, status: "APPROVED" }
+      data: { merchantProfileId: mockMerchantId2,
+          cycles: { create: { cycleNumber: 1, formVersion: { create: { status: "PUBLISHED", versionNumber: 1, form: { create: { name: "Test Form" } } } }, status: "APPROVED", isCurrentCycle: true } }
+    },
+        include: { cycles: true }
     });
   });
 

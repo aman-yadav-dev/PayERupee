@@ -84,7 +84,7 @@ describe("KYC Document Storage Flattening (Slice A)", () => {
     expect(dbDoc).toBeDefined();
 
     // 1. Verify storage key is hierarchical
-    expect(dbDoc!.storageKey).toMatch(new RegExp(`^kyc_documents/${mockMerchantId}/app_storage_1/[0-9a-f-]+$`));
+    expect(dbDoc!.storageKey).toMatch(new RegExp(`^merchant/${mockMerchantId}/kyc/[0-9a-f-]+.*$`));
 
     // 2. Verify file exists on disk
     const fullPath = path.join(process.cwd(), ".storage", dbDoc!.storageKey);
@@ -93,7 +93,7 @@ describe("KYC Document Storage Flattening (Slice A)", () => {
     // 3. Verify nested application directories WERE created
     const nestedAppDirPath = path.dirname(fullPath);
     expect(fs.existsSync(nestedAppDirPath)).toBe(true);
-    expect(path.basename(nestedAppDirPath)).toBe("app_storage_1");
+    expect(path.basename(nestedAppDirPath)).toBe("kyc");
     expect(path.basename(path.dirname(nestedAppDirPath))).toBe(mockMerchantId);
 
     // cleanup
@@ -103,7 +103,7 @@ describe("KYC Document Storage Flattening (Slice A)", () => {
   it("2. Existing nested documents remain readable and deletable", async () => {
     // Manually create a nested storage document to simulate pre-migration state
     const uuid = crypto.randomUUID();
-    const nestedKey = `kyc_documents/app_storage_1/${uuid}`;
+    const nestedKey = `merchant/${mockMerchantId}/kyc/${uuid}`;
     const fullPath = path.join(process.cwd(), ".storage", nestedKey);
 
     fs.mkdirSync(path.dirname(fullPath), { recursive: true });
@@ -189,7 +189,7 @@ describe("KYC Document Storage Flattening (Slice A)", () => {
     
     // The spy gets called with the storage key
     const deletedKey = deleteSpy.mock.calls[0][0];
-    expect(deletedKey).toMatch(new RegExp(`^kyc_documents/${mockMerchantId}/app_storage_1/[0-9a-f-]+$`));
+    expect(deletedKey).toMatch(new RegExp(`^merchant/${mockMerchantId}/kyc/[0-9a-f-]+.*$`));
 
     // Let's actually verify the file does not exist on disk
     const fullPath2 = path.join(process.cwd(), ".storage", deletedKey);

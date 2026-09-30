@@ -20,7 +20,13 @@ export const getResolvedAuthDestination = cache(async (): Promise<AuthDestinatio
     where: { userId: session.user.id },
     include: {
       kycApplication: {
-        select: { status: true, allowResubmission: true }
+        include: {
+          cycles: {
+            where: { isCurrentCycle: true },
+            take: 1,
+            select: { status: true, allowResubmission: true }
+          }
+        }
       }
     }
   });
@@ -34,7 +40,10 @@ export const getResolvedAuthDestination = cache(async (): Promise<AuthDestinatio
     },
     profile: profile ? {
       accountStatus: profile.accountStatus,
-      kycApplication: profile.kycApplication
+      kycApplication: profile.kycApplication ? {
+        status: profile.kycApplication.cycles[0]?.status ?? "PENDING_SUBMISSION",
+        allowResubmission: profile.kycApplication.cycles[0]?.allowResubmission ?? false
+      } : null
     } : null
   });
 });

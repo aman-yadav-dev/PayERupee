@@ -32,7 +32,8 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
   beforeAll(async () => {
     // Setup users, profiles, ledgers, wallets, API keys
     const user = await db.user.create({ data: { name: "O1", email: `o1-${Date.now()}@test.com` } });
-    const profile = await db.merchantProfile.create({ data: { userId: user.id, accountStatus: "ACTIVE", kycApplication: { create: { status: "APPROVED" } } } });
+    const profile = await db.merchantProfile.create({ data: { userId: user.id, accountStatus: "ACTIVE", kycApplication: { create: { cycles: { create: { cycleNumber: 1, formVersion: { create: { status: "PUBLISHED", versionNumber: 1, form: { create: { name: "Test Form" } } } }, status: "APPROVED", isCurrentCycle: true } }
+    } } } });
     merchantId = profile.id;
 
     const transit = await db.ledgerAccount.findFirst({ where: { type: "SYSTEM_TRANSIT" } });
@@ -51,7 +52,8 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
     });
 
     const user2 = await db.user.create({ data: { name: "O2", email: `o2-${Date.now()}@test.com` } });
-    const profile2 = await db.merchantProfile.create({ data: { userId: user2.id, accountStatus: "ACTIVE", kycApplication: { create: { status: "APPROVED" } } } });
+    const profile2 = await db.merchantProfile.create({ data: { userId: user2.id, accountStatus: "ACTIVE", kycApplication: { create: { cycles: { create: { cycleNumber: 1, formVersion: { create: { status: "PUBLISHED", versionNumber: 1, form: { create: { name: "Test Form" } } } }, status: "APPROVED", isCurrentCycle: true } }
+    } } } });
     otherMerchantId = profile2.id;
   });
 

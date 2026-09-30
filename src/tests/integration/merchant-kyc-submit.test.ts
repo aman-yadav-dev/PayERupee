@@ -118,7 +118,7 @@ describe("POST /api/v1/merchant/kyc/application/submit", () => {
     });
 
     it("3. Wrong merchant -> 404", async () => {
-      await db.kycApplication.create({ data: { merchantProfileId: mockMerchantIdB, formVersionId: publishedFormId }});
+      await db.kycApplication.create({ include: { cycles: true }, data: { merchantProfileId: mockMerchantIdB, cycles: { create: { cycleNumber: 1, isCurrentCycle: true, formVersionId: publishedFormId, status: "PENDING_SUBMISSION" } } }});
       mockSession(mockUserIdA, mockMerchantIdA); // tries to submit A, but only B exists
       const res = await submitKyc(createReq());
       expect(res.status).toBe(404);
@@ -127,25 +127,25 @@ describe("POST /api/v1/merchant/kyc/application/submit", () => {
 
   describe("STATE", () => {
     beforeEach(async () => {
-      await db.kycApplication.create({ data: { id: "appA", merchantProfileId: mockMerchantIdA, formVersionId: publishedFormId, status: "PENDING_SUBMISSION", allowResubmission: true }});
+      await db.kycApplication.create({ include: { cycles: true }, data: { id: "appA", merchantProfileId: mockMerchantIdA, cycles: { create: { cycleNumber: 1, isCurrentCycle: true, formVersionId: publishedFormId, status: "PENDING_SUBMISSION", allowResubmission: true } } }});
     });
 
     it("4. UNDER_REVIEW -> 409", async () => {
-      await db.kycApplication.update({ where: { merchantProfileId: mockMerchantIdA }, data: { status: "UNDER_REVIEW" }});
+      const app = await db.kycApplication.findUnique({ where: { merchantProfileId: mockMerchantIdA }, include: { cycles: true }}); await db.kycSubmissionCycle.update({ where: { id: app!.cycles[0].id }, data: { status: "UNDER_REVIEW" }});
       mockSession(mockUserIdA, mockMerchantIdA);
       const res = await submitKyc(createReq());
       expect(res.status).toBe(409);
     });
 
     it("5. APPROVED -> 409", async () => {
-      await db.kycApplication.update({ where: { merchantProfileId: mockMerchantIdA }, data: { status: "APPROVED" }});
+      const app = await db.kycApplication.findUnique({ where: { merchantProfileId: mockMerchantIdA }, include: { cycles: true }}); await db.kycSubmissionCycle.update({ where: { id: app!.cycles[0].id }, data: { status: "APPROVED" }});
       mockSession(mockUserIdA, mockMerchantIdA);
       const res = await submitKyc(createReq());
       expect(res.status).toBe(409);
     });
 
     it("6. REJECTED allowResubmission=false -> 409", async () => {
-      await db.kycApplication.update({ where: { merchantProfileId: mockMerchantIdA }, data: { status: "REJECTED", allowResubmission: false }});
+      const app = await db.kycApplication.findUnique({ where: { merchantProfileId: mockMerchantIdA }, include: { cycles: true }}); await db.kycSubmissionCycle.update({ where: { id: app!.cycles[0].id }, data: { status: "REJECTED", allowResubmission: false }});
       mockSession(mockUserIdA, mockMerchantIdA);
       const res = await submitKyc(createReq());
       expect(res.status).toBe(409);
@@ -155,14 +155,14 @@ describe("POST /api/v1/merchant/kyc/application/submit", () => {
   describe("COMPLETENESS", () => {
     let appId: string;
     beforeEach(async () => {
-      const app = await db.kycApplication.create({ data: { merchantProfileId: mockMerchantIdA, formVersionId: publishedFormId, status: "PENDING_SUBMISSION", allowResubmission: true }});
+      const app = await db.kycApplication.create({ include: { cycles: true }, data: { merchantProfileId: mockMerchantIdA, cycles: { create: { cycleNumber: 1, isCurrentCycle: true, formVersionId: publishedFormId, status: "PENDING_SUBMISSION", allowResubmission: true } } }});
       appId = app.id;
       // Provide valid base answers
       await db.kycAnswer.createMany({ data: [
-        { applicationId: app.id, fieldDefinitionId: fieldNameId, value: "My Company" },
-        { applicationId: app.id, fieldDefinitionId: fieldTypeId, value: "LLP" }
+        { submissionCycleId: app.cycles[0].id, fieldDefinitionId: fieldNameId, value: "My Company" },
+        { submissionCycleId: app.cycles[0].id, fieldDefinitionId: fieldTypeId, value: "LLP" }
       ]});
-      await db.kycDocument.create({ data: { applicationId: app.id, fieldDefinitionId: fieldDocId, storageKey: "key", originalFilename: "file.pdf", mimeType: "application/pdf", sizeBytes: 100, status: "UPLOADED" }});
+      await db.kycDocument.create({ data: { submissionCycleId: app.cycles[0].id, fieldDefinitionId: fieldDocId, storageKey: "key", originalFilename: "file.pdf", mimeType: "application/pdf", sizeBytes: 100, status: "UPLOADED" }});
     });
 
     it("7. Valid PENDING -> success 200", async () => {
@@ -170,10 +170,10 @@ describe("POST /api/v1/merchant/kyc/application/submit", () => {
       const res = await submitKyc(createReq());
       expect(res.status).toBe(200);
       
-      const updated = await db.kycApplication.findUnique({ where: { id: appId }});
-      expect(updated?.status).toBe("UNDER_REVIEW");
-      expect(updated?.allowResubmission).toBe(true);
-      expect(updated?.submittedAt).not.toBeNull();
+      const updated = await db.kycApplication.findUnique({ where: { id: appId }, include: { cycles: true }});
+      expect(updated?.cycles[0].status).toBe("UNDER_REVIEW");
+      expect(updated?.cycles[0].allowResubmission).toBe(true);
+      expect(updated?.cycles[0].submittedAt).not.toBeNull();
     });
 
     it("8. Missing required scalar -> 422", async () => {
@@ -240,7 +240,12 @@ describe("POST /api/v1/merchant/kyc/application/submit", () => {
     });
     
     it("16. REJECTED allowResubmission=true valid -> success", async () => {
-      await db.kycApplication.update({ where: { id: appId }, data: { status: "REJECTED", allowResubmission: true }});
+      await db.kycSubmissionCycle.updateMany({ where: { applicationId: appId }, data: { status: "REJECTED", allowResubmission: true, isCurrentCycle: false }});
+      await db.kycSubmissionCycle.create({ data: { applicationId: appId, cycleNumber: 2, isCurrentCycle: true, formVersionId: publishedFormId, status: "PENDING_SUBMISSION" }});
+      const oldCycle = await db.kycSubmissionCycle.findFirst({ where: { applicationId: appId, cycleNumber: 1 } });
+      const cycle2 = await db.kycSubmissionCycle.findFirst({ where: { applicationId: appId, cycleNumber: 2 } });
+      await db.kycAnswer.updateMany({ where: { submissionCycleId: oldCycle!.id }, data: { submissionCycleId: cycle2!.id } });
+      await db.kycDocument.updateMany({ where: { submissionCycleId: oldCycle!.id }, data: { submissionCycleId: cycle2!.id } });
       mockSession(mockUserIdA, mockMerchantIdA);
       const res = await submitKyc(createReq());
       expect(res.status).toBe(200);
@@ -250,13 +255,13 @@ describe("POST /api/v1/merchant/kyc/application/submit", () => {
   describe("VERSION & CONCURRENCY", () => {
     let appId: string;
     beforeEach(async () => {
-      const app = await db.kycApplication.create({ data: { merchantProfileId: mockMerchantIdA, formVersionId: publishedFormId, status: "PENDING_SUBMISSION" }});
+      const app = await db.kycApplication.create({ include: { cycles: true }, data: { merchantProfileId: mockMerchantIdA, cycles: { create: { cycleNumber: 1, isCurrentCycle: true, formVersionId: publishedFormId, status: "PENDING_SUBMISSION" } } }});
       appId = app.id;
       await db.kycAnswer.createMany({ data: [
-        { applicationId: app.id, fieldDefinitionId: fieldNameId, value: "My Company" },
-        { applicationId: app.id, fieldDefinitionId: fieldTypeId, value: "LLP" }
+        { submissionCycleId: app.cycles[0].id, fieldDefinitionId: fieldNameId, value: "My Company" },
+        { submissionCycleId: app.cycles[0].id, fieldDefinitionId: fieldTypeId, value: "LLP" }
       ]});
-      await db.kycDocument.create({ data: { applicationId: app.id, fieldDefinitionId: fieldDocId, storageKey: "key", originalFilename: "file.pdf", mimeType: "application/pdf", sizeBytes: 100, status: "UPLOADED" }});
+      await db.kycDocument.create({ data: { submissionCycleId: app.cycles[0].id, fieldDefinitionId: fieldDocId, storageKey: "key", originalFilename: "file.pdf", mimeType: "application/pdf", sizeBytes: 100, status: "UPLOADED" }});
     });
 
     it("17. Application validates against its own formVersionId even if newer form published", async () => {
@@ -298,7 +303,8 @@ describe("POST /api/v1/merchant/kyc/application/submit", () => {
     });
 
     it("22. submission vs document deletion -> serialize through lock", async () => {
-      const doc = await db.kycDocument.findFirst({ where: { applicationId: appId } });
+      const cycle = await db.kycSubmissionCycle.findFirst({ where: { applicationId: appId } });
+      const doc = await db.kycDocument.findFirst({ where: { submissionCycleId: cycle!.id } });
       const [submitPromise, delPromise] = [
         submitKycApplication(mockMerchantIdA),
         deleteKycDocument(mockMerchantIdA, doc!.id)
@@ -306,7 +312,7 @@ describe("POST /api/v1/merchant/kyc/application/submit", () => {
       await Promise.allSettled([submitPromise, delPromise]);
       const updatedApp = await db.kycApplication.findUnique({ where: { id: appId } });
       const docExists = await db.kycDocument.findUnique({ where: { id: doc!.id } });
-      if (updatedApp?.status === "UNDER_REVIEW") {
+      const upCyc = await db.kycSubmissionCycle.findFirst({ where: { applicationId: appId } }); if (upCyc?.status === "UNDER_REVIEW") {
         expect(docExists).not.toBeNull();
       }
     });
@@ -320,7 +326,7 @@ describe("POST /api/v1/merchant/kyc/application/submit", () => {
       ];
       await Promise.allSettled([submitPromise, uploadPromise]);
       const updatedApp = await db.kycApplication.findUnique({ where: { id: appId } });
-      expect(["PENDING_SUBMISSION", "UNDER_REVIEW"]).toContain(updatedApp?.status);
+      const upCyc = await db.kycSubmissionCycle.findFirst({ where: { applicationId: appId } }); expect(["PENDING_SUBMISSION", "UNDER_REVIEW"]).toContain(upCyc?.status);
     });
   });
 
@@ -328,13 +334,13 @@ describe("POST /api/v1/merchant/kyc/application/submit", () => {
     let appId: string;
     beforeEach(async () => {
       const pastDate = new Date("2024-01-01T00:00:00Z");
-      const app = await db.kycApplication.create({ data: { merchantProfileId: mockMerchantIdA, formVersionId: publishedFormId, status: "REJECTED", allowResubmission: true, reviewedAt: pastDate }});
+      const app = await db.kycApplication.create({ include: { cycles: true }, data: { merchantProfileId: mockMerchantIdA, cycles: { create: { cycleNumber: 1, isCurrentCycle: true, formVersionId: publishedFormId, status: "PENDING_SUBMISSION", reviewedAt: pastDate } } }});
       appId = app.id;
       await db.kycAnswer.createMany({ data: [
-        { applicationId: app.id, fieldDefinitionId: fieldNameId, value: "My Company" },
-        { applicationId: app.id, fieldDefinitionId: fieldTypeId, value: "LLP" }
+        { submissionCycleId: app.cycles[0].id, fieldDefinitionId: fieldNameId, value: "My Company" },
+        { submissionCycleId: app.cycles[0].id, fieldDefinitionId: fieldTypeId, value: "LLP" }
       ]});
-      await db.kycDocument.create({ data: { applicationId: app.id, fieldDefinitionId: fieldDocId, storageKey: "key", originalFilename: "file.pdf", mimeType: "application/pdf", sizeBytes: 100, status: "UPLOADED" }});
+      await db.kycDocument.create({ data: { submissionCycleId: app.cycles[0].id, fieldDefinitionId: fieldDocId, storageKey: "key", originalFilename: "file.pdf", mimeType: "application/pdf", sizeBytes: 100, status: "UPLOADED" }});
     });
 
     it("19. Successful submission creates UPDATE audit event with correct metadata and timestamps", async () => {
@@ -347,13 +353,14 @@ describe("POST /api/v1/merchant/kyc/application/submit", () => {
       expect(logs[0].actorType).toBe("MERCHANT");
       expect(logs[0].entityType).toBe("KYC_APPLICATION");
       expect(logs[0].action).toBe("UPDATE");
-      expect((logs[0].metadata as any).previousStatus).toBe("REJECTED");
+      expect((logs[0].metadata as any).previousStatus).toBe("PENDING_SUBMISSION");
       expect((logs[0].metadata as any).newStatus).toBe("UNDER_REVIEW");
 
       const app = await db.kycApplication.findUnique({ where: { id: appId }});
-      expect(app?.submittedAt).not.toBeNull();
+      const cycle = await db.kycSubmissionCycle.findFirst({ where: { applicationId: appId } });
+      expect(cycle?.submittedAt).not.toBeNull();
       // Ensure reviewedAt was preserved
-      expect(app?.reviewedAt?.toISOString()).toBe("2024-01-01T00:00:00.000Z");
+      expect(cycle?.reviewedAt?.toISOString()).toBe("2024-01-01T00:00:00.000Z");
     });
 
     it("20. Failed 422 creates no audit event", async () => {

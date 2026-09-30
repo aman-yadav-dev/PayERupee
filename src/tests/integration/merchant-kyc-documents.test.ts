@@ -160,10 +160,10 @@ describe("Phase C3: Merchant KYC Documents - Hardened Matrix", () => {
       const res = await uploadDoc(createReq(fileFieldId1));
       expect(res.status).toBe(201);
     });
-    it("11. REJECTED + allowResubmission=true allowed", async () => {
+    it("11. REJECTED + allowResubmission=true blocked (requires explicit resubmit)", async () => {
       app = await db.kycApplication.findUnique({ where: { id: appIdA }, include: { cycles: true } }); await db.kycSubmissionCycle.update({ where: { id: app!.cycles[0].id }, data: { status: "REJECTED", allowResubmission: true }});
       const res = await uploadDoc(createReq(fileFieldId1));
-      expect(res.status).toBe(201);
+      expect(res.status).toBe(409);
     });
     it("12. REJECTED + allowResubmission=false blocked", async () => {
       app = await db.kycApplication.findUnique({ where: { id: appIdA }, include: { cycles: true } }); await db.kycSubmissionCycle.update({ where: { id: app!.cycles[0].id }, data: { status: "REJECTED", allowResubmission: false }});
