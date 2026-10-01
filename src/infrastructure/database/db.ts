@@ -18,7 +18,13 @@ const prismaClientSingleton = () => {
 
 export const db = globalThis.prismaGlobal ?? prismaClientSingleton();
 
+
 if (process.env.NODE_ENV !== "production") {
   globalThis.prismaGlobal = db;
   globalThis.pgPoolGlobal = pool;
+  
+  if (process.env.NODE_ENV === "development") {
+    const { startDevEmailOutboxScheduler } = require("../dev/dev-scheduler");
+    startDevEmailOutboxScheduler();
+  }
 }

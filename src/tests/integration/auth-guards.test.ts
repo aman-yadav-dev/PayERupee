@@ -26,6 +26,10 @@ vi.mock("next/navigation", () => ({
   redirect: (url: string) => mockRedirect(url),
 }));
 
+vi.mock("@/modules/auth/application/session-auth.service", () => ({
+  requireMerchantContext: vi.fn(() => ({ merchantProfileId: "dummy-id" }))
+}));
+
 // Provide minimal mocks for UI components so tests can run
 vi.mock("@/components/merchant/kyc/KycShell", () => ({
   KycShell: () => "KycShell",

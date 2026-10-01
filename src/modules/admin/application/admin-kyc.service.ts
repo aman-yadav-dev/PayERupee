@@ -2,6 +2,7 @@ import { db } from "@/infrastructure/database/db";
 import { KycStatus, AuditActorType, AuditEntity, AuditAction, Prisma } from "@prisma/client";
 import { logAction } from "@/modules/audit/domain/audit.service";
 import { LocalDiskStorageAdapter } from "@/infrastructure/storage/local-disk.adapter";
+import { triggerImmediateEmailDispatch } from "@/modules/notifications/application/email-outbox.dispatcher";
 const storageProvider = new LocalDiskStorageAdapter();
 import { ApplicationNotFoundError, KycStateError, KycValidationError } from "@/modules/merchant/application/merchant-kyc.service";
 
@@ -170,7 +171,7 @@ export async function downloadAdminKycDocument(applicationId: string, documentId
  * Approve a KYC application.
  */
 export async function approveKycApplication(adminUserId: string, applicationId: string) {
-  return await db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     // Acquire parent-row lock
     const application = await tx.kycApplication.update({
       where: { id: applicationId },
@@ -244,6 +245,9 @@ export async function approveKycApplication(adminUserId: string, applicationId: 
 
     return updatedCycle;
   });
+
+  triggerImmediateEmailDispatch();
+  return result;
 }
 
 /**
@@ -265,7 +269,7 @@ export async function rejectKycApplication(
     throw new KycValidationError("allowResubmission must be a boolean.");
   }
 
-  return await db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     // Acquire parent-row lock
     const application = await tx.kycApplication.update({
       where: { id: applicationId },
@@ -327,17 +331,19 @@ export async function rejectKycApplication(
     const userName = application.merchantProfile?.user?.name;
 
     if (kycEmailsEnabled && userEmail && userName) {
+      const { env } = await import("@/config/env");
       await tx.outboxEvent.create({
         data: {
           referenceType: "EMAIL_DISPATCH",
           referenceId: `KYC_REJECT_${application.id}_v${currentCycle.cycleNumber}`,
           payload: {
             to: userEmail,
-            subject: "KYC Application Rejected",
+            subject: "Action Required: KYC Application Rejected",
             templateId: "KYC_REJECTED",
             templateVariables: { 
               name: userName,
-              reason: rejectionReason.trim()
+              reason: rejectionReason.trim(),
+              ctaLink: env.BETTER_AUTH_URL + "/kyc/rejected"
             }
           }
         }
@@ -346,6 +352,9 @@ export async function rejectKycApplication(
 
     return updatedCycle;
   });
+
+  triggerImmediateEmailDispatch();
+  return result;
 }
 
 /**

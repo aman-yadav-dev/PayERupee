@@ -20,11 +20,15 @@ export const auth = betterAuth({
     autoSignIn: true,
     resetPasswordTokenExpiresIn: 3600, // 1 hour
     sendResetPassword: async ({ user, url, token }) => {
-      const { sendPasswordResetEmail } = await import("@/infrastructure/notifications/mailer");
+      const { sendPasswordResetEmail } =
+        await import("@/infrastructure/notifications/mailer");
 
       const resetUrl = new URL(url);
       // The callbackURL is where Better Auth will redirect the user after token validation
-      resetUrl.searchParams.set("callbackURL", `${resetUrl.origin}/reset-password`);
+      resetUrl.searchParams.set(
+        "callbackURL",
+        `${resetUrl.origin}/reset-password`,
+      );
 
       await sendPasswordResetEmail({
         user: { id: user.id, email: user.email!, name: user.name },
@@ -40,18 +44,31 @@ export const auth = betterAuth({
     autoSignInAfterVerification: true,
     expiresIn: EMAIL_VERIFICATION_EXPIRATION_SECONDS,
     sendVerificationEmail: async ({ user, url, token }) => {
-      const { sendVerificationEmail } = await import("@/infrastructure/notifications/mailer");
-      const { setSystemLease } = await import("@/modules/system/domain/lease.service");
+      const { sendVerificationEmail } =
+        await import("@/infrastructure/notifications/mailer");
+      const { setSystemLease } =
+        await import("@/modules/system/domain/lease.service");
 
       const verifyUrl = new URL(url);
-      verifyUrl.searchParams.set("callbackURL", `${verifyUrl.origin}/verify-result?success=true`);
+      verifyUrl.searchParams.set(
+        "callbackURL",
+        `${verifyUrl.origin}/verify-result?success=true`,
+      );
 
-      await sendVerificationEmail({ user: { id: user.id, email: user.email!, name: user.name }, url: verifyUrl.toString(), token });
+      await sendVerificationEmail({
+        user: { id: user.id, email: user.email!, name: user.name },
+        url: verifyUrl.toString(),
+        token,
+      });
 
       // ONLY AFTER successful mailer completion, establish the cooldown lease
-      await setSystemLease(`email_verification_cooldown_${user.id}`, user.id, 30);
+      await setSystemLease(
+        `email_verification_cooldown_${user.id}`,
+        user.id,
+        30,
+      );
     },
-    afterEmailVerification: async () => {
+    afterEmailVerification: async (user) => {
       const cookieStore = await cookies();
       cookieStore.set("payERupee_verification_fresh", "1", {
         httpOnly: true,
@@ -60,6 +77,53 @@ export const auth = betterAuth({
         path: "/verify-result",
         maxAge: 15,
       });
+
+      try {
+        const userRecord = await db.user.findUnique({
+          where: { id: user.id },
+          include: {
+            merchantProfile: true,
+            notificationPreference: true,
+          },
+        });
+
+        if (!userRecord?.merchantProfile) {
+          console.warn(`[afterEmailVerification] No merchant profile found for verified user ${user.id}`);
+          return;
+        }
+
+        if (user.email && user.name) {
+          const eventsData: any[] = [];
+          
+          eventsData.push({
+            referenceId: "REG_SUCCESS_" + userRecord.merchantProfile.id,
+            referenceType: "EMAIL_DISPATCH",
+            payload: {
+              to: user.email,
+              subject: "Welcome to PayERupee",
+              templateId: "REGISTRATION_SUCCESS",
+              templateVariables: { 
+                name: user.name,
+                ctaLink: env.BETTER_AUTH_URL + "/kyc/start"
+              }
+            }
+          });
+
+          // Use a transaction and skipDuplicates for guaranteed idempotency
+          await db.$transaction(async (tx) => {
+            await tx.outboxEvent.createMany({
+              data: eventsData,
+              skipDuplicates: true,
+            });
+          });
+
+          const { triggerImmediateEmailDispatch } = await import("@/modules/notifications/application/email-outbox.dispatcher");
+          triggerImmediateEmailDispatch();
+        }
+      } catch (error) {
+        console.error(`[afterEmailVerification] Error creating outbox events for user ${user.id}:`, error);
+        // Do not throw; the user has successfully verified, do not disrupt the UX.
+      }
     },
   },
 
@@ -80,6 +144,46 @@ export const auth = betterAuth({
   databaseHooks: {
     session: {
       create: {
+        async after(session) {
+          try {
+            const user = await db.user.findUnique({ 
+              where: { id: session.userId }, 
+              select: { name: true, email: true, createdAt: true, emailVerified: true }
+            });
+
+            // Suppress login notification for unverified emails
+            if (!user?.emailVerified) return;
+
+            // Suppress login notification for the initial registration session
+            const isInitialRegistration = Math.abs(session.createdAt.getTime() - user.createdAt.getTime()) < 60000;
+            if (isInitialRegistration) return;
+
+            const { getNotificationPreferences } = await import("@/modules/notifications/application/preference.service");
+            const prefs = await getNotificationPreferences(session.userId);
+            if (prefs.loginEmailsEnabled && user?.email && user?.name) {
+              await db.outboxEvent.create({
+                  data: {
+                    referenceId: "LOGIN_" + session.id,
+                    referenceType: "EMAIL_DISPATCH",
+                    payload: {
+                      templateId: "LOGIN_NOTIFICATION",
+                      to: user.email,
+                      subject: "New Login to PayERupee",
+                      templateVariables: {
+                        name: user.name,
+                        time: new Date().toUTCString()
+                      }
+                    }
+                  }
+                });
+                
+                const { triggerImmediateEmailDispatch } = await import("@/modules/notifications/application/email-outbox.dispatcher");
+                triggerImmediateEmailDispatch();
+              }
+          } catch (e) {
+            console.error("Failed to enqueue login email:", e);
+          }
+        },
         async before(session) {
           const profile = await db.merchantProfile.findUnique({
             where: { userId: session.userId },
@@ -87,8 +191,14 @@ export const auth = betterAuth({
           });
 
           if (profile) {
-            if (profile.accountStatus === "SUSPENDED" || profile.accountStatus === "DELETED") {
-              throw APIError.from("UNAUTHORIZED", { code: "UNAUTHORIZED", message: "Account is suspended" });
+            if (
+              profile.accountStatus === "SUSPENDED" ||
+              profile.accountStatus === "DELETED"
+            ) {
+              throw APIError.from("UNAUTHORIZED", {
+                code: "UNAUTHORIZED",
+                message: "Account is suspended",
+              });
             }
           }
 

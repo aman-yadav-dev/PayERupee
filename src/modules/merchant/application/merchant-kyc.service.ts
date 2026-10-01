@@ -2,6 +2,7 @@ import { db } from "@/infrastructure/database/db";
 import { LocalDiskStorageAdapter } from "@/infrastructure/storage/local-disk.adapter";
 import { logAction } from "@/modules/audit/domain/audit.service";
 import { AuditActorType, AuditEntity, AuditAction, MerchantType } from "@prisma/client";
+import { triggerImmediateEmailDispatch } from "@/modules/notifications/application/email-outbox.dispatcher";
 import crypto from "crypto";
 
 function resolveCurrentCycle(application: any) {
@@ -528,7 +529,7 @@ export async function submitKycApplication(merchantProfileId: string) {
   const merchantType = profile?.merchantType as MerchantType | undefined;
   if (!merchantType) throw new MerchantTypeMissingError();
 
-  return await db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     let application = await tx.kycApplication.findUnique({ 
       where: { merchantProfileId },
       include: { 
@@ -725,10 +726,11 @@ export async function submitKycApplication(merchantProfileId: string) {
       await tx.outboxEvent.create({
         data: {
           referenceId: `KYC_SUBMIT_${application.id}_v${cycle.cycleNumber}`,
-          referenceType: AuditEntity.KYC_APPLICATION,
+          referenceType: "EMAIL_DISPATCH",
           payload: {
             templateId: "KYC_SUBMITTED",
             to: userEmail,
+            subject: "We have received your KYC application",
             templateVariables: {
               name: userName,
               isResubmission: cycle.cycleNumber > 1
@@ -740,8 +742,10 @@ export async function submitKycApplication(merchantProfileId: string) {
 
     return updatedCycle;
   });
-}
 
+  triggerImmediateEmailDispatch();
+  return result;
+}
 
 
 

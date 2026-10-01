@@ -1,6 +1,7 @@
 import { db } from "@/infrastructure/database/db";
 import { logAction } from "@/modules/audit/domain/audit.service";
 import { AccountStatus, AuditActorType, AuditEntity, AuditAction } from "@prisma/client";
+import { triggerImmediateEmailDispatch } from "@/modules/notifications/application/email-outbox.dispatcher";
 
 export class AdminMerchantNotFoundError extends Error {
   constructor() {
@@ -21,11 +22,11 @@ export class AdminMerchantStateConflictError extends Error {
  * Records the action in the audit log atomically.
  */
 export async function approveMerchantAccount(adminUserId: string, merchantProfileId: string) {
-  return await db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     // 1. Fetch current state to determine precise error (404 vs 409)
     const profile = await tx.merchantProfile.findUnique({
       where: { id: merchantProfileId },
-      select: { id: true, accountStatus: true }
+      select: { id: true, accountStatus: true, user: { select: { email: true, name: true } } }
     });
 
     if (!profile) {
@@ -61,12 +62,35 @@ export async function approveMerchantAccount(adminUserId: string, merchantProfil
       metadata: { previousStatus: AccountStatus.PENDING }
     }, tx);
 
+    // 4. Dispatch Email
+    if (profile.user?.email && profile.user?.name) {
+      const { env } = await import("@/config/env");
+      await tx.outboxEvent.create({
+        data: {
+          referenceId: "ACCOUNT_APPROVED_" + merchantProfileId,
+          referenceType: "EMAIL_DISPATCH",
+          payload: {
+            to: profile.user.email,
+            subject: "Your PayERupee Account is Active",
+            templateId: "ACCOUNT_APPROVED",
+            templateVariables: {
+              name: profile.user.name,
+              ctaLink: env.BETTER_AUTH_URL + "/dashboard"
+            }
+          }
+        }
+      });
+    }
+
     return { 
       success: true, 
       merchantProfileId, 
       accountStatus: AccountStatus.ACTIVE 
     };
   });
+
+  triggerImmediateEmailDispatch();
+  return result;
 }
 
 

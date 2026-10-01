@@ -260,6 +260,15 @@ export const emailOutboxPayloadSchema = z.discriminatedUnion("templateId", [
   z.object({
     to: z.string().email(),
     subject: z.string().min(1),
+    templateId: z.literal("REGISTRATION_SUCCESS"),
+    templateVariables: z.object({
+      name: z.string(),
+      ctaLink: z.string()
+    })
+  }),
+  z.object({
+    to: z.string().email(),
+    subject: z.string().min(1),
     templateId: z.literal("KYC_SUBMITTED"),
     templateVariables: z.object({
       name: z.string(),
@@ -272,7 +281,8 @@ export const emailOutboxPayloadSchema = z.discriminatedUnion("templateId", [
     templateId: z.literal("KYC_REJECTED"),
     templateVariables: z.object({
       name: z.string(),
-      reason: z.string()
+      reason: z.string(),
+      ctaLink: z.string()
     })
   }),
   z.object({
@@ -281,6 +291,24 @@ export const emailOutboxPayloadSchema = z.discriminatedUnion("templateId", [
     templateId: z.literal("KYC_APPROVED"),
     templateVariables: z.object({
       name: z.string()
+    })
+  }),
+  z.object({
+    to: z.string().email(),
+    subject: z.string().min(1),
+    templateId: z.literal("ACCOUNT_APPROVED"),
+    templateVariables: z.object({
+      name: z.string(),
+      ctaLink: z.string()
+    })
+  }),
+  z.object({
+    to: z.string().email(),
+    subject: z.string().min(1),
+    templateId: z.literal("LOGIN_NOTIFICATION"),
+    templateVariables: z.object({
+      name: z.string(),
+      time: z.string()
     })
   }),
   z.object({
@@ -301,6 +329,14 @@ export async function dispatchOutboxEmail(payload: EmailOutboxPayload) {
     const safeMessage = escapeHtml(payload.templateVariables.message);
     htmlContent = '<p style="margin:0;font-size:15px;color:#374151;">' + safeMessage + '</p>';
     textContent = payload.templateVariables.message;
+  } else if (payload.templateId === "REGISTRATION_SUCCESS") {
+    const safeName = escapeHtml(payload.templateVariables.name);
+    const safeLink = escapeHtml(payload.templateVariables.ctaLink);
+    htmlContent = `<p>Hi ${safeName},</p><p>Welcome to PayERupee! Your initial onboarding is complete.</p><p>Please complete your KYC application to activate your account.</p><p><a href="${safeLink}">Click here to complete KYC</a></p>`;
+    textContent = `Hi ${payload.templateVariables.name},
+Welcome to PayERupee! Your initial onboarding is complete.
+Please complete your KYC application to activate your account.
+Link: ${payload.templateVariables.ctaLink}`;
   } else if (payload.templateId === "KYC_SUBMITTED") {
     const safeName = escapeHtml(payload.templateVariables.name);
     const subType = payload.templateVariables.isResubmission ? "resubmitted" : "submitted";
@@ -310,20 +346,35 @@ Your KYC application has been ${subType} and is currently under review. Please n
   } else if (payload.templateId === "KYC_REJECTED") {
     const safeName = escapeHtml(payload.templateVariables.name);
     const safeReason = escapeHtml(payload.templateVariables.reason);
-    htmlContent = `<p>Hi ${safeName},</p><p>Your KYC application has been rejected.</p><p>Reason: ${safeReason}</p>`;
+    const safeLink = escapeHtml(payload.templateVariables.ctaLink);
+    htmlContent = `<p>Hi ${safeName},</p><p>Your KYC application has been rejected.</p><p>Reason: ${safeReason}</p><p><a href="${safeLink}">Click here to resubmit</a></p>`;
     textContent = `Hi ${payload.templateVariables.name},
 Your KYC application has been rejected.
-Reason: ${payload.templateVariables.reason}`;
+Reason: ${payload.templateVariables.reason}
+Link: ${payload.templateVariables.ctaLink}`;
   } else if (payload.templateId === "KYC_APPROVED") {
     const safeName = escapeHtml(payload.templateVariables.name);
     htmlContent = `<p>Hi ${safeName},</p><p>Your KYC application has been approved.</p>`;
     textContent = `Hi ${payload.templateVariables.name},
 Your KYC application has been approved.`;
+  } else if (payload.templateId === "ACCOUNT_APPROVED") {
+    const safeName = escapeHtml(payload.templateVariables.name);
+    const safeLink = escapeHtml(payload.templateVariables.ctaLink);
+    htmlContent = `<p>Hi ${safeName},</p><p>Your PayERupee account is now active!</p><p><a href="${safeLink}">Go to Dashboard</a></p>`;
+    textContent = `Hi ${payload.templateVariables.name},
+Your PayERupee account is now active!
+Link: ${payload.templateVariables.ctaLink}`;
+  } else if (payload.templateId === "LOGIN_NOTIFICATION") {
+    const safeName = escapeHtml(payload.templateVariables.name);
+    const safeTime = escapeHtml(payload.templateVariables.time);
+    htmlContent = `<p>Hi ${safeName},</p><p>We noticed a new login to your PayERupee account on ${safeTime}.</p><p>If this wasn't you, please reset your password immediately.</p>`;
+    textContent = `Hi ${payload.templateVariables.name},
+We noticed a new login to your PayERupee account on ${payload.templateVariables.time}.
+If this wasn't you, please reset your password immediately.`;
   } else if (payload.templateId === "TEST_TEMPLATE") {
     htmlContent = "<p>Test Email</p>";
     textContent = "Test Email";
   } else {
-    // Should be unreachable due to Zod schema, but keeping for safety
     throw new Error("Unsupported templateId");
   }
 

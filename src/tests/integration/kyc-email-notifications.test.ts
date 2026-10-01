@@ -1,3 +1,4 @@
+import { emailOutboxPayloadSchema } from '@/infrastructure/notifications/mailer';
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { db } from "@/infrastructure/database/db";
 import { submitKycApplication } from "@/modules/merchant/application/merchant-kyc.service";

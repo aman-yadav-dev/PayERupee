@@ -1,6 +1,7 @@
 import { db } from "@/infrastructure/database/db";
 import { UserRole, AccountStatus, LedgerAccountType, Currency, AuditActorType, AuditEntity, AuditAction, Prisma } from "@prisma/client";
 import { logAction } from "@/modules/audit/domain/audit.service";
+import { triggerImmediateEmailDispatch } from "@/modules/notifications/application/email-outbox.dispatcher";
 
 export type OnboardingInput = {
   userId: string;
@@ -20,7 +21,7 @@ export class MerchantExistsError extends Error {
  * Executes the atomic merchant onboarding sequence.
  */
 export async function onboardMerchant(input: OnboardingInput) {
-  return await db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     // 1. Verify merchant profile doesn't already exist
     const existing = await tx.merchantProfile.findUnique({
       where: { userId: input.userId },
@@ -30,9 +31,10 @@ export async function onboardMerchant(input: OnboardingInput) {
     }
 
     // 2. Mutate User.role only
-    await tx.user.update({
+    const user = await tx.user.update({
       where: { id: input.userId },
       data: { role: UserRole.MERCHANT },
+      select: { name: true, email: true, emailVerified: true, notificationPreference: { select: { kycEmailsEnabled: true } } }
     });
 
     // 3. Create MerchantProfile
@@ -74,6 +76,33 @@ export async function onboardMerchant(input: OnboardingInput) {
       metadata: { userId: input.userId, walletId: wallet.id },
     }, tx);
 
-    return { merchantProfile, liabilityAccount, wallet };
+    // 7. Dispatch REGISTRATION_SUCCESS (Welcome + KYC CTA) ONLY IF the user is already verified (e.g. Google OAuth)
+    // For email/password signups (emailVerified=false), this is deferred to the afterEmailVerification hook.
+    if (user.emailVerified && user.email && user.name) {
+      const { env } = await import("@/config/env");
+      await tx.outboxEvent.create({
+        data: {
+          referenceId: "REG_SUCCESS_" + merchantProfile.id,
+          referenceType: "EMAIL_DISPATCH",
+          payload: {
+            to: user.email,
+            subject: "Welcome to PayERupee",
+            templateId: "REGISTRATION_SUCCESS",
+            templateVariables: { 
+              name: user.name,
+              ctaLink: env.BETTER_AUTH_URL + "/kyc/start"
+            }
+          }
+        }
+      });
+    }
+
+    return { merchantProfile, liabilityAccount, wallet, emailVerified: user.emailVerified };
   });
+
+  if (result.emailVerified) {
+    triggerImmediateEmailDispatch();
+  }
+
+  return result;
 }
