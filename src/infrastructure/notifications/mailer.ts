@@ -321,6 +321,18 @@ export const emailOutboxPayloadSchema = z.discriminatedUnion("templateId", [
 
 export type EmailOutboxPayload = z.infer<typeof emailOutboxPayloadSchema>;
 
+function getButtonHtml(label: string, url: string): string {
+  return `
+    <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin-top:24px;margin-bottom:24px;">
+      <tr>
+        <td align="center" bgcolor="#4f46e5" style="border-radius:8px;">
+          <a href="${url}" target="_blank" style="display:inline-block;padding:12px 24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;background-color:#4f46e5;">${label}</a>
+        </td>
+      </tr>
+    </table>
+  `;
+}
+
 export async function dispatchOutboxEmail(payload: EmailOutboxPayload) {
   let htmlContent = "";
   let textContent = "";
@@ -332,45 +344,86 @@ export async function dispatchOutboxEmail(payload: EmailOutboxPayload) {
   } else if (payload.templateId === "REGISTRATION_SUCCESS") {
     const safeName = escapeHtml(payload.templateVariables.name);
     const safeLink = escapeHtml(payload.templateVariables.ctaLink);
-    htmlContent = `<p>Hi ${safeName},</p><p>Welcome to PayERupee! Your initial onboarding is complete.</p><p>Please complete your KYC application to activate your account.</p><p><a href="${safeLink}">Click here to complete KYC</a></p>`;
-    textContent = `Hi ${payload.templateVariables.name},
+    htmlContent = `
+      <p style="margin:0 0 16px 0;color:#111827;font-weight:600;font-size:16px;">Hello ${safeName},</p>
+      <p style="margin:0 0 16px 0;color:#374151;font-size:15px;">Welcome to PayERupee! Your initial onboarding is complete.</p>
+      <p style="margin:0 0 16px 0;color:#374151;font-size:15px;">Please complete your KYC application to activate your account.</p>
+      ${getButtonHtml("Complete KYC", safeLink)}
+    `;
+    textContent = `Hello ${payload.templateVariables.name},
+
 Welcome to PayERupee! Your initial onboarding is complete.
 Please complete your KYC application to activate your account.
-Link: ${payload.templateVariables.ctaLink}`;
+
+Complete KYC: ${payload.templateVariables.ctaLink}`;
   } else if (payload.templateId === "KYC_SUBMITTED") {
     const safeName = escapeHtml(payload.templateVariables.name);
     const subType = payload.templateVariables.isResubmission ? "resubmitted" : "submitted";
-    htmlContent = `<p>Hi ${safeName},</p><p>Your KYC application has been ${subType} and is currently under review. Please note this does not imply approval.</p>`;
-    textContent = `Hi ${payload.templateVariables.name},
+    htmlContent = `
+      <p style="margin:0 0 16px 0;color:#111827;font-weight:600;font-size:16px;">Hello ${safeName},</p>
+      <p style="margin:0 0 16px 0;color:#374151;font-size:15px;">Your KYC application has been ${subType} and is currently under review. Please note this does not imply approval.</p>
+    `;
+    textContent = `Hello ${payload.templateVariables.name},
+
 Your KYC application has been ${subType} and is currently under review. Please note this does not imply approval.`;
   } else if (payload.templateId === "KYC_REJECTED") {
     const safeName = escapeHtml(payload.templateVariables.name);
     const safeReason = escapeHtml(payload.templateVariables.reason);
     const safeLink = escapeHtml(payload.templateVariables.ctaLink);
-    htmlContent = `<p>Hi ${safeName},</p><p>Your KYC application has been rejected.</p><p>Reason: ${safeReason}</p><p><a href="${safeLink}">Click here to resubmit</a></p>`;
-    textContent = `Hi ${payload.templateVariables.name},
+    htmlContent = `
+      <p style="margin:0 0 16px 0;color:#111827;font-weight:600;font-size:16px;">Hello ${safeName},</p>
+      <p style="margin:0 0 16px 0;color:#374151;font-size:15px;">Your KYC application has been rejected.</p>
+      <div style="background-color:#fee2e2;border-radius:6px;padding:16px;margin-bottom:24px;">
+        <p style="margin:0;font-size:14px;color:#991b1b;"><strong>Reason:</strong> ${safeReason}</p>
+      </div>
+      <p style="margin:0 0 16px 0;color:#374151;font-size:15px;">Please review the reason above and resubmit your application.</p>
+      ${getButtonHtml("Resubmit KYC", safeLink)}
+    `;
+    textContent = `Hello ${payload.templateVariables.name},
+
 Your KYC application has been rejected.
+
 Reason: ${payload.templateVariables.reason}
-Link: ${payload.templateVariables.ctaLink}`;
+
+Resubmit KYC: ${payload.templateVariables.ctaLink}`;
   } else if (payload.templateId === "KYC_APPROVED") {
     const safeName = escapeHtml(payload.templateVariables.name);
-    htmlContent = `<p>Hi ${safeName},</p><p>Your KYC application has been approved.</p>`;
-    textContent = `Hi ${payload.templateVariables.name},
+    htmlContent = `
+      <p style="margin:0 0 16px 0;color:#111827;font-weight:600;font-size:16px;">Hello ${safeName},</p>
+      <p style="margin:0 0 16px 0;color:#374151;font-size:15px;">Your KYC application has been approved.</p>
+    `;
+    textContent = `Hello ${payload.templateVariables.name},
+
 Your KYC application has been approved.`;
   } else if (payload.templateId === "ACCOUNT_APPROVED") {
     const safeName = escapeHtml(payload.templateVariables.name);
     const safeLink = escapeHtml(payload.templateVariables.ctaLink);
-    htmlContent = `<p>Hi ${safeName},</p><p>Your PayERupee account is now active!</p><p><a href="${safeLink}">Go to Dashboard</a></p>`;
-    textContent = `Hi ${payload.templateVariables.name},
+    htmlContent = `
+      <p style="margin:0 0 16px 0;color:#111827;font-weight:600;font-size:16px;">Hello ${safeName},</p>
+      <p style="margin:0 0 16px 0;color:#374151;font-size:15px;">Your PayERupee account is now active!</p>
+      ${getButtonHtml("Go to Dashboard", safeLink)}
+    `;
+    textContent = `Hello ${payload.templateVariables.name},
+
 Your PayERupee account is now active!
-Link: ${payload.templateVariables.ctaLink}`;
+
+Go to Dashboard: ${payload.templateVariables.ctaLink}`;
   } else if (payload.templateId === "LOGIN_NOTIFICATION") {
     const safeName = escapeHtml(payload.templateVariables.name);
     const safeTime = escapeHtml(payload.templateVariables.time);
-    htmlContent = `<p>Hi ${safeName},</p><p>We noticed a new login to your PayERupee account on ${safeTime}.</p><p>If this wasn't you, please reset your password immediately.</p>`;
-    textContent = `Hi ${payload.templateVariables.name},
+    const resetUrl = escapeHtml(env.BETTER_AUTH_URL + "/forgot-password");
+    htmlContent = `
+      <p style="margin:0 0 16px 0;color:#111827;font-weight:600;font-size:16px;">Hello ${safeName},</p>
+      <p style="margin:0 0 16px 0;color:#374151;font-size:15px;">We noticed a new login to your PayERupee account on <strong>${safeTime}</strong>.</p>
+      <p style="margin:0 0 16px 0;color:#374151;font-size:15px;">If this wasn't you, please reset your password immediately to secure your account.</p>
+      ${getButtonHtml("Reset Password", resetUrl)}
+    `;
+    textContent = `Hello ${payload.templateVariables.name},
+
 We noticed a new login to your PayERupee account on ${payload.templateVariables.time}.
-If this wasn't you, please reset your password immediately.`;
+
+If this wasn't you, please reset your password immediately to secure your account:
+${env.BETTER_AUTH_URL}/forgot-password`;
   } else if (payload.templateId === "TEST_TEMPLATE") {
     htmlContent = "<p>Test Email</p>";
     textContent = "Test Email";
