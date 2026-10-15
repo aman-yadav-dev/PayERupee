@@ -1,3 +1,4 @@
+import { logger } from "@/infrastructure/logger/logger";
 import { NextRequest, NextResponse } from "next/server";
 import { requireMerchantContext } from "@/modules/auth/application/session-auth.service";
 import { 
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
     if (error instanceof KycCompletenessError) {
       return NextResponse.json({ success: false, errors: error.errors }, { status: 422 });
     }
-    console.error("KYC Submission Error:", error);
+    logger.error("KYC Submission Error:", error);
     return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }

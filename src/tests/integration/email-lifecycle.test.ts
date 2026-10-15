@@ -216,7 +216,7 @@ describe('Email Lifecycle', () => {
     });
 
     it('1. registration session does not generate LOGIN_NOTIFICATION (delta < 60s)', async () => {
-      await db.notificationPreference.create({ data: { userId: user.id, loginEmailsEnabled: true } });
+      const profile = await db.merchantProfile.create({data: {userId: user.id}}); await db.merchantSecuritySettings.create({ data: { merchantProfileId: profile.id, loginNotificationsEnabled: true } });
       
       const session = {
         id: randomUUID(),
@@ -231,7 +231,7 @@ describe('Email Lifecycle', () => {
     });
 
     it('5. normal later login generates LOGIN_NOTIFICATION when enabled', async () => {
-      await db.notificationPreference.create({ data: { userId: user.id, loginEmailsEnabled: true } });
+      const profile = await db.merchantProfile.create({data: {userId: user.id}}); await db.merchantSecuritySettings.create({ data: { merchantProfileId: profile.id, loginNotificationsEnabled: true } });
       
       const session = {
         id: randomUUID(),
@@ -262,7 +262,7 @@ describe('Email Lifecycle', () => {
     });
 
     it('suppresses LOGIN_NOTIFICATION if email is unverified even if later login', async () => {
-      await db.notificationPreference.create({ data: { userId: user.id, loginEmailsEnabled: true } });
+      const profile = await db.merchantProfile.create({data: {userId: user.id}}); await db.merchantSecuritySettings.create({ data: { merchantProfileId: profile.id, loginNotificationsEnabled: true } });
       
       // make user unverified
       await db.user.update({ where: { id: user.id }, data: { emailVerified: false } });

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, vi } from "vitest"; import * as providerFactory from "@/modules/provider/adapters/provider.factory";
 import { db } from "@/infrastructure/database/db";
 import { processOutbox } from "@/modules/payout/application/outbox.processor";
 import { IPayoutProvider, ProviderDispatchResult, NormalizedWebhookEvent } from "@/modules/provider/core/provider.interface";
@@ -31,7 +31,7 @@ describe("Outbox Background Processor", () => {
   let merchantId: string;
   let provider = new TestProvider();
 
-  beforeAll(async () => {
+  beforeAll(async () => { vi.spyOn(providerFactory, "getPayoutProvider").mockImplementation(() => provider);
     // Basic setup to get a merchant
     const user = await db.user.create({ data: { email: `outbox-${Date.now()}@example.com`, name: "Outbox Test User" } });
     const { merchantProfile, wallet, liabilityAccount } = await onboardMerchant({ userId: user.id, businessName: "Outbox Business" });
@@ -79,7 +79,7 @@ describe("Outbox Background Processor", () => {
     provider.dispatchCount = 0;
 
     // Sweep 1 -> Fails with NETWORK_ERROR
-    await processOutbox("worker-1", provider);
+    await processOutbox("worker-1");
     let event = await db.outboxEvent.findUnique({ where: { id: outbox.id } });
     
     // Status should be EXHAUSTED immediately, attempts = 1
@@ -93,7 +93,7 @@ describe("Outbox Background Processor", () => {
     // Time travel bypass
     await db.outboxEvent.update({ where: { id: outbox.id }, data: { nextRunAt: new Date() } });
 
-    await processOutbox("worker-1", provider);
+    await processOutbox("worker-1");
     
     // Dispatch count should remain 1 because attempts > 0 triggers Reconciler handoff!
     expect(provider.dispatchCount).toBe(1);
@@ -130,7 +130,7 @@ describe("Outbox Background Processor", () => {
 
     provider.failDispatchNTimes = 5; // Will definitely fail
 
-    await processOutbox("worker-2", provider);
+    await processOutbox("worker-1");
     
     const event = await db.outboxEvent.findUnique({ where: { id: outbox.id } });
     expect(event?.status).toBe("EXHAUSTED");
@@ -172,10 +172,10 @@ describe("Outbox Background Processor", () => {
       }
     }
 
-    const successProvider = new SuccessProvider();
+    const successProvider = new SuccessProvider(); vi.spyOn(providerFactory, "getPayoutProvider").mockReturnValue(successProvider);
 
     // 4. Run the processor
-    await processOutbox("worker-success", successProvider);
+    await processOutbox("worker-1");
 
     // 5. Verify the Outbox is COMPLETED
     const event = await db.outboxEvent.findUnique({ where: { id: outbox.id } });

@@ -1,22 +1,39 @@
+import { logger } from "@/infrastructure/logger/logger";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/modules/auth/application/session-auth.service";
 import { downloadAdminKycDocument } from "@/modules/admin/application/admin-kyc.service";
 import { ApplicationNotFoundError, KycValidationError } from "@/modules/merchant/application/merchant-kyc.service";
+import { logAction } from "@/modules/audit/domain/audit.service";
+import { AuditActorType, AuditEntity, AuditAction } from "@prisma/client";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ applicationId: string, documentId: string }> }) {
   try {
-    await requireAdmin(req);
-    const result = await downloadAdminKycDocument((await params).applicationId, (await params).documentId);
+    const session = await requireAdmin(req);
+    const resolvedParams = await params;
+    const result = await downloadAdminKycDocument(resolvedParams.applicationId, resolvedParams.documentId);
     
     const safeName = result.originalFilename.replace(/[\r\n`"]/g, "");
     const encodedName = encodeURIComponent(safeName);
 
-    return new NextResponse(result.buffer as any, {
+    await logAction({
+      actorType: AuditActorType.ADMIN,
+      actorId: session.user.id,
+      entityType: AuditEntity.KYC_APPLICATION,
+      entityId: resolvedParams.applicationId,
+      action: AuditAction.PROCESS,
+      metadata: {
+        documentId: resolvedParams.documentId,
+        filename: safeName,
+        operation: "DOCUMENT_DOWNLOAD",
+      },
+    });
+
+    return new NextResponse(new Uint8Array(result.buffer), {
       status: 200,
       headers: {
         "Content-Type": result.mimeType,
-        "Content-Disposition": "attachment; filename*=UTF-8''" + encodedName
-      }
+        "Content-Disposition": "attachment; filename*=UTF-8''" + encodedName,
+      },
     });
   } catch (error) {
     if (error instanceof UnauthorizedError) return NextResponse.json({ error: error.message }, { status: 401 });
@@ -28,7 +45,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ appl
       }
       return NextResponse.json({ error: error.message }, { status: 404 });
     }
-    console.error("[GET /api/v1/admin/kyc/applications/[id]/documents/[docId]/download]", error);
+    logger.error("[GET /api/v1/admin/kyc/applications/[id]/documents/[docId]/download]", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

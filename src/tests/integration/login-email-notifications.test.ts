@@ -10,30 +10,34 @@ vi.mock("@/modules/notifications/application/email-outbox.dispatcher", () => ({
 
 describe("Login Email Notifications", () => {
   let user: any;
+  let profile: any;
 
   beforeEach(async () => {
     await db.outboxEvent.deleteMany();
     await db.session.deleteMany();
-    await db.notificationPreference.deleteMany();
+    await db.merchantSecuritySettings.deleteMany();
+    await db.merchantProfile.deleteMany();
     await db.user.deleteMany();
 
     user = await db.user.create({
       data: { name: "Login Test User", email: "login@test.com", emailVerified: true, createdAt: new Date(Date.now() - 120000) }
+    });
+    profile = await db.merchantProfile.create({
+      data: { userId: user.id }
     });
   });
 
   afterEach(async () => {
     await db.outboxEvent.deleteMany();
     await db.session.deleteMany();
-    await db.notificationPreference.deleteMany();
+    await db.merchantSecuritySettings.deleteMany();
+    await db.merchantProfile.deleteMany();
     await db.user.deleteMany();
   });
 
   it("1. Creates a LOGIN_NOTIFICATION outbox event and invokes triggerImmediateEmailDispatch", async () => {
     vi.clearAllMocks();
-    await db.notificationPreference.create({
-      data: { userId: user.id, loginEmailsEnabled: true, kycEmailsEnabled: true }
-    });
+    await db.notificationPreference.create({ data: { userId: user.id, loginEmailsEnabled: true } });
 
     const session = await db.session.create({
       data: {
@@ -50,9 +54,8 @@ describe("Login Email Notifications", () => {
       await hooks.after(session);
     }
 
-    const events = await db.outboxEvent.findMany();
+    const events = await db.outboxEvent.findMany({ where: { referenceType: "EMAIL_DISPATCH" } });
     expect(events.length).toBe(1);
-    expect(events[0].referenceType).toBe("EMAIL_DISPATCH");
     expect(events[0].referenceId).toBe("LOGIN_" + session.id);
 
     const payload = emailOutboxPayloadSchema.parse(events[0].payload);
@@ -64,13 +67,15 @@ describe("Login Email Notifications", () => {
 
   it("1b. Suppresses initial-registration login notification", async () => {
     vi.clearAllMocks();
-    await db.notificationPreference.create({
-      data: { userId: user.id, loginEmailsEnabled: true, kycEmailsEnabled: true }
-    });
+    await db.notificationPreference.create({ data: { userId: user.id, loginEmailsEnabled: true } });
 
     const newRegistrationUser = await db.user.create({
       data: { name: "New Reg", email: "newreg@test.com", emailVerified: true, createdAt: new Date() }
     });
+    const newRegProfile = await db.merchantProfile.create({
+      data: { userId: newRegistrationUser.id }
+    });
+    await db.notificationPreference.create({ data: { userId: newRegistrationUser.id, loginEmailsEnabled: true } });
 
     const session = await db.session.create({
       data: {
@@ -93,10 +98,8 @@ describe("Login Email Notifications", () => {
     expect(outboxDispatcher.triggerImmediateEmailDispatch).not.toHaveBeenCalled();
   });
 
-  it("2. Does NOT create an event when loginEmailsEnabled = false", async () => {
-    await db.notificationPreference.create({
-      data: { userId: user.id, loginEmailsEnabled: false, kycEmailsEnabled: true }
-    });
+  it("2. Does NOT create an event when loginNotificationsEnabled = false", async () => {
+    await db.notificationPreference.create({ data: { userId: user.id, loginEmailsEnabled: false } });
 
     const session = await db.session.create({
       data: {
@@ -113,14 +116,12 @@ describe("Login Email Notifications", () => {
       await hooks.after(session);
     }
 
-    const events = await db.outboxEvent.findMany();
+    const events = await db.outboxEvent.findMany({ where: { referenceType: "EMAIL_DISPATCH" } });
     expect(events.length).toBe(0);
   });
 
   it("3. Repeated invocation safely violate the unique constraint and do not duplicate events", async () => {
-    await db.notificationPreference.create({
-      data: { userId: user.id, loginEmailsEnabled: true, kycEmailsEnabled: true }
-    });
+    await db.notificationPreference.create({ data: { userId: user.id, loginEmailsEnabled: true } });
 
     const session = await db.session.create({
       data: {
@@ -138,7 +139,7 @@ describe("Login Email Notifications", () => {
       await hooks.after(session);
     }
 
-    const events = await db.outboxEvent.findMany();
+    const events = await db.outboxEvent.findMany({ where: { referenceType: "EMAIL_DISPATCH" } });
     expect(events.length).toBe(1);
   });
 });

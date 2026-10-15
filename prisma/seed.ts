@@ -1,4 +1,6 @@
-import { PrismaClient, LedgerAccountType, Currency } from '@prisma/client'
+import "dotenv/config";
+process.env.DISABLE_DEV_SCHEDULER = "true";
+import { PrismaClient, LedgerAccountType, Currency, PaymentMode } from '@prisma/client'
 import { Pool } from 'pg'
 import { PrismaPg } from '@prisma/adapter-pg'
 
@@ -56,25 +58,70 @@ async function main() {
   }
 
   // 3. Seed System Settings
-  const settingsCount = await prisma.systemSetting.count()
-  if (settingsCount === 0) {
-    await prisma.systemSetting.create({
-      data: {
-        id: "GLOBAL_SETTINGS",
-        upiPayoutFee: 0,
-        impsPayoutFee: 5,
-        neftPayoutFee: 3,
-        rtgsPayoutFee: 10,
-        taxPercentage: 18,
-        minPayoutAmount: 10,
-        maxPayoutAmount: 500000,
-        reconciliationThresholdMins: 15,
-      }
-    })
-    console.log('Created GLOBAL_SETTINGS.')
+  await prisma.systemSetting.upsert({
+    where: { id: "GLOBAL_SETTINGS" },
+    update: { minPayoutAmount: 1, maxPayoutAmount: 10000000 },
+    create: {
+      id: "GLOBAL_SETTINGS",
+      upiPayoutFee: 0,
+      impsPayoutFee: 5,
+      neftPayoutFee: 3,
+      rtgsPayoutFee: 10,
+      taxPercentage: 18,
+      minPayoutAmount: 1,
+      maxPayoutAmount: 10000000,
+      reconciliationThresholdMins: 15,
+    }
+  });
+  console.log("Upserted GLOBAL_SETTINGS.");
+
+  // 3b. Seed Payout Fee Rules safely
+  const feeRules = [
+    { paymentMode: PaymentMode.UPI, minAmount: 1, maxAmount: 1000, fee: 2.50 },
+    { paymentMode: PaymentMode.UPI, minAmount: 1000.01, maxAmount: 10000, fee: 10.45 },
+    { paymentMode: PaymentMode.UPI, minAmount: 10000.01, maxAmount: 10000000, fee: 20.80 },
+    { paymentMode: PaymentMode.IMPS, minAmount: 1, maxAmount: 1000, fee: 6.00 },
+    { paymentMode: PaymentMode.IMPS, minAmount: 1000.01, maxAmount: 10000, fee: 10.45 },
+    { paymentMode: PaymentMode.IMPS, minAmount: 10000.01, maxAmount: 10000000, fee: 20.80 },
+  ];
+
+  const allActive = await prisma.payoutFeeRule.findMany({ where: { isActive: true } });
+  
+  for (const active of allActive) {
+    const isCanonical = feeRules.find(r => r.paymentMode === active.paymentMode && Number(active.minAmount) === r.minAmount && Number(active.maxAmount) === r.maxAmount);
+    if (!isCanonical) {
+      await prisma.payoutFeeRule.update({ where: { id: active.id }, data: { isActive: false } });
+    }
   }
 
+  for (const rule of feeRules) {
+    const existingRule = await prisma.payoutFeeRule.findFirst({
+      where: { paymentMode: rule.paymentMode, minAmount: rule.minAmount, maxAmount: rule.maxAmount }
+    });
+    if (!existingRule) {
+      await prisma.payoutFeeRule.create({ data: rule });
+    } else {
+      await prisma.payoutFeeRule.update({ where: { id: existingRule.id }, data: { fee: rule.fee, isActive: true } });
+    }
+  }
   
+  for (const rule of feeRules) {
+    const duplicates = await prisma.payoutFeeRule.findMany({
+      where: { paymentMode: rule.paymentMode, minAmount: rule.minAmount, maxAmount: rule.maxAmount, isActive: true },
+      orderBy: { createdAt: "asc" }
+    });
+    if (duplicates.length > 1) {
+      for (let i = 1; i < duplicates.length; i++) {
+        await prisma.payoutFeeRule.update({ where: { id: duplicates[i].id }, data: { isActive: false } });
+      }
+    }
+  }
+
+  const { validatePricingConfiguration } = await import("../src/modules/payout/application/pricing.validator");
+  await validatePricingConfiguration();
+
+  console.log("Upserted Payout Fee Rules and deactivated legacy/duplicate rules.");
+
   // 4. Seed KYC Form
   const existingForm = await prisma.kycForm.findFirst({
     where: { name: "Development Default KYC Form" }

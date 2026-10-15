@@ -130,4 +130,20 @@ describe("Destination Service (AUTH-LIFE-1)", () => {
     expect(resolveAuthDestination(ctx)).toBe("/pending-approval");
   });
 
+  it("returns /admin/dashboard for ADMIN users even with no merchant profile", () => {
+    const ctx = buildContext({
+      session: { user: { id: "admin-1", emailVerified: true, role: "ADMIN" } },
+      profile: null,
+    });
+    expect(resolveAuthDestination(ctx)).toBe("/admin/dashboard");
+  });
+
+  it("returns /admin/dashboard for SUPER_ADMIN users even with no merchant profile", () => {
+    const ctx = buildContext({
+      session: { user: { id: "super-admin-1", emailVerified: true, role: "SUPER_ADMIN" } },
+      profile: null,
+    });
+    expect(resolveAuthDestination(ctx)).toBe("/admin/dashboard");
+  });
+
 });

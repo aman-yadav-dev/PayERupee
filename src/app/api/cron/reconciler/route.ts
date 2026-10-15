@@ -1,3 +1,4 @@
+import { logger } from "@/infrastructure/logger/logger";
 import { NextRequest, NextResponse } from "next/server";
 import { env } from "@/config/env";
 import { PayoutReconciler } from "@/modules/payout/application/payout.reconciler";
@@ -17,7 +18,7 @@ export async function GET(req: NextRequest) {
     await PayoutReconciler.reconcileStalePayouts(workerId);
     return NextResponse.json({ success: true, workerId });
   } catch (e) {
-    console.error("Reconciler Cron Error:", e);
+    logger.error("Reconciler Cron Error:", e);
     // Do not leak secrets or error details
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }

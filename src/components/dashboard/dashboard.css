@@ -1,0 +1,281 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+.dashboard-theme {
+  color-scheme: light;
+
+  --canvas: #f5f8fc;
+  --surface: #ffffff;
+  --surface-hover: #f7f9fd;
+  --line: #e3e9f3;
+  --line-soft: #edf1f8;
+
+  --text-primary: #0b1220;
+  --text-secondary: #55617a;
+  --text-muted: #8792a8;
+
+  --sidebar-bg: #ffffff;
+  --sidebar-border: #e3e9f3;
+  --sidebar-text: #5b6786;
+  --sidebar-text-active: #0b1220;
+  --sidebar-active-bg: #eaf1ff;
+  --sidebar-icon: #8792a8;
+  --sidebar-icon-active: #155eef;
+  --sidebar-section-label: #9aa5bd;
+  --sidebar-footer-bg: #f3f7fe;
+
+  --blue-800: #0b3fa8;
+  --blue-700: #0f4fd1;
+  --blue-600: #155eef;
+  --blue-500: #2f72f5;
+  --blue-400: #5c92f8;
+  --blue-100: #e8effd;
+  --blue-50: #f3f7fe;
+
+  --coral-600: #c93b41;
+  --coral-500: #e1494f;
+  --coral-100: #fbe8e9;
+
+  --amber-600: #b7791f;
+  --amber-500: #d99a2b;
+  --amber-100: #faf0dd;
+
+  --neutral-500: #b6bfd1;
+  --neutral-chip: #edf0f6;
+
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-hero: 0 24px 48px -20px rgba(11, 32, 90, 0.35);
+  --shadow-pop: 0 16px 32px -14px rgba(15, 23, 42, 0.14);
+}
+
+.dark .dashboard-theme {
+  color-scheme: dark;
+
+  --canvas: #070b14;
+  --surface: #0e1420;
+  --surface-hover: #131a29;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-soft: rgba(255, 255, 255, 0.05);
+
+  --text-primary: #f1f5fc;
+  --text-secondary: #92a0be;
+  --text-muted: #66738f;
+
+  --sidebar-bg: #060a12;
+  --sidebar-border: rgba(255, 255, 255, 0.07);
+  --sidebar-text: #8593b4;
+  --sidebar-text-active: #f1f5fc;
+  --sidebar-active-bg: rgba(47, 114, 245, 0.16);
+  --sidebar-icon: #6b7690;
+  --sidebar-icon-active: #5c92f8;
+  --sidebar-section-label: #5b6786;
+  --sidebar-footer-bg: rgba(255, 255, 255, 0.03);
+
+  --blue-800: #0b3fa8;
+  --blue-700: #2f72f5;
+  --blue-600: #4c86fa;
+  --blue-500: #5c92f8;
+  --blue-400: #7fa8fa;
+  --blue-100: rgba(47, 114, 245, 0.16);
+  --blue-50: rgba(47, 114, 245, 0.08);
+
+  --coral-600: #ff8d90;
+  --coral-500: #f0565c;
+  --coral-100: rgba(225, 73, 79, 0.16);
+
+  --amber-600: #f0b94e;
+  --amber-500: #e0a73b;
+  --amber-100: rgba(217, 154, 43, 0.16);
+
+  --neutral-500: #4a5573;
+  --neutral-chip: rgba(255, 255, 255, 0.07);
+
+  --shadow-hero: 0 24px 48px -18px rgba(0, 0, 0, 0.6);
+  --shadow-pop: 0 16px 32px -14px rgba(0, 0, 0, 0.5);
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+
+  --color-sidebar-bg: var(--sidebar-bg);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-text: var(--sidebar-text);
+  --color-sidebar-text-active: var(--sidebar-text-active);
+  --color-sidebar-active-bg: var(--sidebar-active-bg);
+  --color-sidebar-icon: var(--sidebar-icon);
+  --color-sidebar-icon-active: var(--sidebar-icon-active);
+  --color-sidebar-section-label: var(--sidebar-section-label);
+  --color-sidebar-footer-bg: var(--sidebar-footer-bg);
+
+  --color-blue-800: var(--blue-800);
+  --color-blue-700: var(--blue-700);
+  --color-blue-600: var(--blue-600);
+  --color-blue-500: var(--blue-500);
+  --color-blue-400: var(--blue-400);
+  --color-blue-100: var(--blue-100);
+  --color-blue-50: var(--blue-50);
+
+  --color-coral-600: var(--coral-600);
+  --color-coral-500: var(--coral-500);
+  --color-coral-100: var(--coral-100);
+
+  --color-amber-600: var(--amber-600);
+  --color-amber-500: var(--amber-500);
+  --color-amber-100: var(--amber-100);
+
+  --color-neutral-500: var(--neutral-500);
+  --color-neutral-chip: var(--neutral-chip);
+
+  --font-display: "Space Grotesk";
+  --font-sans: "Inter";
+}
+
+.dashboard-theme * {
+  border-color: var(--line);
+}
+
+
+
+.dashboard-theme {
+  background: var(--color-canvas);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* Every surface that carries a theme color gets a smooth crossfade when
+   toggling light/dark, instead of a hard snap. Scoped to color-ish
+   properties only so it never fights layout/hover transforms. */
+.dashboard-theme aside, .dashboard-theme header, .dashboard-theme main, .dashboard-theme .rounded-2xl, .dashboard-theme .rounded-xl, .dashboard-theme .rounded-lg, .dashboard-theme table, .dashboard-theme tr, .dashboard-theme input {
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+}
+
+.font-display {
+  font-family: var(--font-display), ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.scroll-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+}
+
+/* Visible, smooth horizontal & vertical scrollbar for data tables */
+.table-scrollbar::-webkit-scrollbar {
+  height: 7px;
+  width: 7px;
+}
+.table-scrollbar::-webkit-scrollbar-track {
+  background: var(--color-canvas);
+  border-radius: 4px;
+}
+.table-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 4px;
+}
+.table-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+.table-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) var(--color-canvas);
+}
+
+/* ---- motion system ---- */
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes expand-down {
+  from { opacity: 0; transform: translateY(-4px); max-height: 0; }
+  to { opacity: 1; transform: translateY(0); max-height: 400px; }
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fade-in {
+  animation: fade-in 0.4s ease backwards;
+}
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.72); }
+}
+
+.animate-pop-in {
+  animation: pop-in 0.16s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.animate-expand-down {
+  animation: expand-down 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+  overflow: hidden;
+}
+.animate-fade-up {
+  animation: fade-up 0.45s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+.animate-live-pulse {
+  animation: live-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes grow-width {
+  from { width: 0%; }
+  to { width: var(--bar-w, 100%); }
+}
+.animate-grow-width {
+  animation: grow-width 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Subtle, premium hover lift for card surfaces — moved via transform (GPU,
+   no layout thrash) with a slightly deeper shadow, never on touch devices
+   where ":hover" sticks after tapping. */
+@media (hover: hover) {
+  .lift-on-hover {
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  }
+  .lift-on-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-pop);
+  }
+}
+
+.press-feedback {
+  transition: transform 0.12s ease;
+}
+.press-feedback:active {
+  transform: scale(0.96);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+.dashboard-theme :focus-visible {
+  outline: 2px solid var(--blue-500);
+  outline-offset: 2px;
+}

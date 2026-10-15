@@ -3,10 +3,40 @@ import { Prisma, PayoutStatus, LedgerEntryPurpose, ReferenceType, PaymentMode, A
 import { adjustWalletBalance } from "@/modules/wallet/domain/wallet.service";
 import { createLedgerEntry } from "@/modules/ledger/domain/ledger.service";
 import { logAction } from "@/modules/audit/domain/audit.service";
+import { BanService } from "@/modules/ban/domain/ban.service";
+import { BanDestinationInput } from "@/modules/ban/application/ban-crypto.service";
 import { z } from "zod";
 
 const Decimal = Prisma.Decimal;
 type Decimal = Prisma.Decimal;
+
+
+export class DestinationBannedError extends Error {
+  public banScope?: "GLOBAL" | "MERCHANT";
+  public banReason?: string;
+  public maskedDestination?: string;
+  constructor(message: string, options?: { banScope?: "GLOBAL" | "MERCHANT"; banReason?: string; maskedDestination?: string }) {
+    super(message);
+    this.name = "DestinationBannedError";
+    this.banScope = options?.banScope;
+    this.banReason = options?.banReason;
+    this.maskedDestination = options?.maskedDestination;
+  }
+}
+
+export class PayoutValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PayoutValidationError";
+  }
+}
+
+export class IdempotencyConflictError extends Error {
+  constructor(message = "Idempotency-Key has already been used with a different request.") {
+    super(message);
+    this.name = "IdempotencyConflictError";
+  }
+}
 
 export class IllegalStateTransitionError extends Error {
   constructor(from: string, to: string) {
@@ -23,13 +53,29 @@ export class SystemConfigurationError extends Error {
 }
 
 export const PayoutRequestSchema = z.object({
-  idempotencyKey: z.string().min(1),
-  amount: z.string().refine(val => !isNaN(Number(val)) && Number(val) > 0, "Must be a positive decimal"),
-  paymentMode: z.nativeEnum(PaymentMode).optional(),
-  accountNumber: z.string().min(5).max(30),
-  ifscCode: z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, "Invalid IFSC code"),
-  accountHolderName: z.string().min(2),
+  amount: z.union([z.string(), z.number()])
+    .transform(val => String(val))
+    .refine(val => !isNaN(Number(val)) && Number(val) > 0, "Must be a positive decimal"),
+  paymentMode: z.nativeEnum(PaymentMode).refine(m => m === PaymentMode.UPI || m === PaymentMode.IMPS, "Unsupported payment mode. Only UPI and IMPS are allowed.").optional(),
+    merchantReference: z.string().max(100).optional(),
+  
+  // Bank destination (optional at base level)
+  accountNumber: z.string().min(5).max(30).optional(),
+  ifscCode: z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, "Invalid IFSC code").optional(),
+  accountHolderName: z.string().min(2).optional(),
+  
+  // UPI destination
+  vpa: z.string().regex(/^[\w.-]+@[\w.-]+$/, "Invalid VPA format").optional(),
+  
   beneficiaryPhone: z.string().regex(/^\+[1-9]\d{1,14}$/, "Must be E.164 format").optional(),
+}).refine(data => {
+  const mode = data.paymentMode || PaymentMode.IMPS;
+  if (mode === PaymentMode.UPI) {
+    return !!data.vpa;
+  }
+  return !!data.accountNumber && !!data.ifscCode && !!data.accountHolderName;
+}, {
+  message: "Invalid destination. Bank payouts require accountNumber, ifscCode, and accountHolderName. UPI payouts require vpa."
 });
 
 export type CreatePayoutInput = z.infer<typeof PayoutRequestSchema>;
@@ -44,7 +90,30 @@ async function getSystemSettings() {
   return settings;
 }
 
-export async function createPayout(merchantProfileId: string, inputData: unknown) {
+
+async function resolvePayoutFee(paymentMode: PaymentMode, amount: Prisma.Decimal): Promise<Prisma.Decimal> {
+  const rules = await db.payoutFeeRule.findMany({
+    where: { paymentMode, isActive: true }
+  });
+
+  if (rules.length === 0) {
+    throw new PayoutValidationError(`No active pricing rules found for ${paymentMode}`);
+  }
+
+  const matchingRules = rules.filter(rule => amount.gte(rule.minAmount) && amount.lte(rule.maxAmount));
+  
+  if (matchingRules.length === 0) {
+    throw new PayoutValidationError(`Amount ${amount.toString()} falls outside supported pricing tiers for ${paymentMode}`);
+  }
+  
+  if (matchingRules.length > 1) {
+    throw new PayoutValidationError(`Configuration error: Multiple overlapping active rules match amount ${amount.toString()} for ${paymentMode}`);
+  }
+
+  return matchingRules[0].fee;
+}
+
+export async function createPayout(merchantProfileId: string, environment: "TEST" | "LIVE", idempotencyKey: string, inputData: unknown) {
   // 1. Zod Validation
   const input = PayoutRequestSchema.parse(inputData);
   const amountDecimal = new Decimal(input.amount);
@@ -55,36 +124,78 @@ export async function createPayout(merchantProfileId: string, inputData: unknown
 
   // 3. Min/Max Validation
   if (amountDecimal.lt(settings.minPayoutAmount) || amountDecimal.gt(settings.maxPayoutAmount)) {
-    throw new Error(`Amount must be between ${settings.minPayoutAmount} and ${settings.maxPayoutAmount}`);
+    throw new PayoutValidationError(`Amount must be between ${settings.minPayoutAmount} and ${settings.maxPayoutAmount}`);
   }
 
   // Calculate fees server-side
-  let fee = new Decimal(0);
-  switch (paymentMode) {
-    case PaymentMode.UPI: fee = settings.upiPayoutFee; break;
-    case PaymentMode.IMPS: fee = settings.impsPayoutFee; break;
-    case PaymentMode.NEFT: fee = settings.neftPayoutFee; break;
-    case PaymentMode.RTGS: fee = settings.rtgsPayoutFee; break;
-  }
+  const fee = await resolvePayoutFee(paymentMode, amountDecimal);
   
   const tax = fee.mul(settings.taxPercentage).div(100);
   const totalDebitAmount = amountDecimal.add(fee).add(tax);
+
+  // Check if payout already exists for idempotency before ban check / creation
+  const existingPayout = await db.payout.findUnique({
+    where: {
+      merchantProfileId_idempotencyKey_environment: {
+        merchantProfileId,
+        idempotencyKey,
+        environment,
+      }
+    }
+  });
+
+  if (existingPayout) {
+    // Idempotency Conflict Detection
+    // Compare canonical request fields
+    const isSameAmount = new Decimal(existingPayout.amount).eq(amountDecimal);
+    const isSameMode = existingPayout.paymentMode === paymentMode;
+    const isSameMerchantRef = (existingPayout.merchantReference || "") === (input.merchantReference || "");
+    const isSameAccNumber = (existingPayout.accountNumber || "") === (input.accountNumber || "");
+    const isSameIfsc = (existingPayout.ifscCode || "") === (input.ifscCode || "");
+    const isSameName = (existingPayout.accountHolderName || "") === (input.accountHolderName || "");
+    const isSameVpa = (existingPayout.vpa || "") === (input.vpa || "");
+    const isSamePhone = (existingPayout.beneficiaryPhone || "") === (input.beneficiaryPhone || "");
+
+    if (!isSameAmount || !isSameMode || !isSameMerchantRef || !isSameAccNumber || !isSameIfsc || !isSameName || !isSameVpa || !isSamePhone) {
+      throw new IdempotencyConflictError();
+    }
+
+    return { payout: existingPayout, isNew: false };
+  }
+
+  // Destination ban check enforcement
+  const destinationInput: BanDestinationInput =
+    paymentMode === PaymentMode.UPI
+      ? { type: "UPI", vpa: input.vpa! }
+      : { type: "BANK_ACCOUNT", accountNumber: input.accountNumber!, ifsc: input.ifscCode! };
+
+  const banCheck = await BanService.checkDestinationBan(destinationInput, merchantProfileId);
+  if (banCheck.isBanned) {
+    throw new DestinationBannedError("Payout destination is restricted by ban policy.", {
+      banScope: banCheck.banScope,
+      banReason: banCheck.reason,
+      maskedDestination: banCheck.maskedDestination,
+    });
+  }
 
   try {
     const payout = await db.payout.create({
       data: {
         merchantProfileId,
-        idempotencyKey: input.idempotencyKey,
+        environment,
+        idempotencyKey,
         amount: amountDecimal,
         fee,
         tax,
         totalDebitAmount,
         status: PayoutStatus.PENDING,
         paymentMode,
-        accountNumber: input.accountNumber,
-        ifscCode: input.ifscCode,
-        accountHolderName: input.accountHolderName,
-        beneficiaryPhone: input.beneficiaryPhone,
+          merchantReference: input.merchantReference || null,
+        accountNumber: input.accountNumber || null,
+        ifscCode: input.ifscCode || null,
+        accountHolderName: input.accountHolderName || null,
+        vpa: input.vpa || null,
+        beneficiaryPhone: input.beneficiaryPhone || null,
       },
     });
     return { payout, isNew: true };
@@ -93,14 +204,32 @@ export async function createPayout(merchantProfileId: string, inputData: unknown
       // Idempotency constraint triggered
       const existing = await db.payout.findUnique({
         where: {
-          merchantProfileId_idempotencyKey: {
+          merchantProfileId_idempotencyKey_environment: {
             merchantProfileId,
-            idempotencyKey: input.idempotencyKey,
+            idempotencyKey,
+            environment,
           }
         }
       });
       if (!existing) throw new Error("Idempotency resolution failed");
-      return { payout: existing, isNew: false };
+      
+        // Idempotency Conflict Detection
+        // Compare canonical request fields
+        const isSameAmount = new Decimal(existing.amount).eq(amountDecimal);
+        const isSameMode = existing.paymentMode === paymentMode;
+        const isSameMerchantRef = (existing.merchantReference || "") === (input.merchantReference || "");
+        const isSameAccNumber = (existing.accountNumber || "") === (input.accountNumber || "");
+        const isSameIfsc = (existing.ifscCode || "") === (input.ifscCode || "");
+        const isSameName = (existing.accountHolderName || "") === (input.accountHolderName || "");
+        const isSameVpa = (existing.vpa || "") === (input.vpa || "");
+        const isSamePhone = (existing.beneficiaryPhone || "") === (input.beneficiaryPhone || "");
+
+        if (!isSameAmount || !isSameMode || !isSameMerchantRef || !isSameAccNumber || !isSameIfsc || !isSameName || !isSameVpa || !isSamePhone) {
+          throw new IdempotencyConflictError();
+        }
+
+        return { payout: existing, isNew: false };
+
     }
     throw error;
   }
@@ -139,40 +268,42 @@ export async function processPayout(payoutId: string, merchantProfileId: string)
       data: { status: PayoutStatus.PROCESSING }
     });
 
-    // 4. Ledger Entries
-    await createLedgerEntry({
-      amount: payout.amount,
-      debitAccountId: wallet.ledgerAccountId,
-      creditAccountId: transitAccount.id,
-      purpose: LedgerEntryPurpose.PRINCIPAL,
-      referenceType: ReferenceType.PAYOUT,
-      referenceId: payout.id,
-      payoutId: payout.id,
-      description: "Payout Principal",
-    }, tx);
-
-    const feeAndTax = payout.fee.add(payout.tax);
-    if (feeAndTax.gt(0)) {
+    // 4. Ledger Entries and Wallet Adjustment (ONLY FOR LIVE)
+    if (payout.environment === "LIVE") {
       await createLedgerEntry({
-        amount: feeAndTax,
+        amount: payout.amount,
         debitAccountId: wallet.ledgerAccountId,
-        creditAccountId: revenueAccount.id,
-        purpose: LedgerEntryPurpose.FEE_AND_TAX,
+        creditAccountId: transitAccount.id,
+        purpose: LedgerEntryPurpose.PRINCIPAL,
         referenceType: ReferenceType.PAYOUT,
         referenceId: payout.id,
         payoutId: payout.id,
-        description: "Payout Fee & Tax",
+        description: "Payout Principal",
       }, tx);
-    }
 
-    // 5. Adjust Wallet
-    await adjustWalletBalance(
-      wallet.id,
-      merchantProfileId,
-      payout.totalDebitAmount.negated(),
-      wallet.version,
-      tx
-    );
+      const feeAndTax = payout.fee.add(payout.tax);
+      if (feeAndTax.gt(0)) {
+        await createLedgerEntry({
+          amount: feeAndTax,
+          debitAccountId: wallet.ledgerAccountId,
+          creditAccountId: revenueAccount.id,
+          purpose: LedgerEntryPurpose.FEE_AND_TAX,
+          referenceType: ReferenceType.PAYOUT,
+          referenceId: payout.id,
+          payoutId: payout.id,
+          description: "Payout Fee & Tax",
+        }, tx);
+      }
+
+      // 5. Adjust Wallet
+      await adjustWalletBalance(
+        wallet.id,
+        merchantProfileId,
+        payout.totalDebitAmount.negated(),
+        wallet.version,
+        tx
+      );
+    }
 
     // 6. Audit
     await logAction({
@@ -228,7 +359,7 @@ export async function handlePayoutSuccess(payoutId: string, merchantProfileId: s
   }, { maxWait: 5000, timeout: 20000 });
 }
 
-export async function failPayout(payoutId: string, merchantProfileId: string, reason?: string) {
+export async function failPayout(payoutId: string, merchantProfileId: string, reason?: string, providerFailureDetails?: Record<string, unknown> | null) {
   return await db.$transaction(async (tx) => {
     const payout = await tx.payout.findUnique({ where: { id: payoutId, merchantProfileId } });
     if (!payout) throw new Error("Payout not found");
@@ -249,44 +380,47 @@ export async function failPayout(payoutId: string, merchantProfileId: string, re
       data: {
         status: PayoutStatus.FAILED,
         failureReason: reason,
+          providerFailureDetails: providerFailureDetails ? (providerFailureDetails as Prisma.InputJsonValue) : undefined,
         processedAt: new Date(),
       }
     });
 
-    // Compensating Ledgers
-    await createLedgerEntry({
-      amount: payout.amount,
-      creditAccountId: wallet.ledgerAccountId,
-      debitAccountId: transitAccount.id,
-      purpose: LedgerEntryPurpose.REVERSAL_PRINCIPAL,
-      referenceType: ReferenceType.PAYOUT,
-      referenceId: payout.id,
-      payoutId: payout.id,
-      description: "Payout Reversal Principal",
-    }, tx);
-
-    const feeAndTax = payout.fee.add(payout.tax);
-    if (feeAndTax.gt(0)) {
+    // Compensating Ledgers (ONLY FOR LIVE)
+    if (payout.environment === "LIVE") {
       await createLedgerEntry({
-        amount: feeAndTax,
+        amount: payout.amount,
         creditAccountId: wallet.ledgerAccountId,
-        debitAccountId: revenueAccount.id,
-        purpose: LedgerEntryPurpose.REVERSAL_FEE_AND_TAX,
+        debitAccountId: transitAccount.id,
+        purpose: LedgerEntryPurpose.REVERSAL_PRINCIPAL,
         referenceType: ReferenceType.PAYOUT,
         referenceId: payout.id,
         payoutId: payout.id,
-        description: "Payout Reversal Fee & Tax",
+        description: "Payout Reversal Principal",
       }, tx);
-    }
 
-    // Adjust Wallet Back
-    await adjustWalletBalance(
-      wallet.id,
-      merchantProfileId,
-      payout.totalDebitAmount, // POSITIVE amount to refund
-      wallet.version,
-      tx
-    );
+      const feeAndTax = payout.fee.add(payout.tax);
+      if (feeAndTax.gt(0)) {
+        await createLedgerEntry({
+          amount: feeAndTax,
+          creditAccountId: wallet.ledgerAccountId,
+          debitAccountId: revenueAccount.id,
+          purpose: LedgerEntryPurpose.REVERSAL_FEE_AND_TAX,
+          referenceType: ReferenceType.PAYOUT,
+          referenceId: payout.id,
+          payoutId: payout.id,
+          description: "Payout Reversal Fee & Tax",
+        }, tx);
+      }
+
+      // Adjust Wallet Back
+      await adjustWalletBalance(
+        wallet.id,
+        merchantProfileId,
+        payout.totalDebitAmount, // POSITIVE amount to refund
+        wallet.version,
+        tx
+      );
+    }
 
     await logAction({
       actorType: AuditActorType.SYSTEM,
@@ -325,40 +459,42 @@ export async function reversePayout(payoutId: string, merchantProfileId: string,
       }
     });
 
-    // Compensating Ledgers
-    await createLedgerEntry({
-      amount: payout.amount,
-      creditAccountId: wallet.ledgerAccountId,
-      debitAccountId: transitAccount.id,
-      purpose: LedgerEntryPurpose.REVERSAL_PRINCIPAL,
-      referenceType: ReferenceType.PAYOUT,
-      referenceId: payout.id,
-      payoutId: payout.id,
-      description: "Payout Reversal Principal",
-    }, tx);
-
-    const feeAndTax = payout.fee.add(payout.tax);
-    if (feeAndTax.gt(0)) {
+    // Compensating Ledgers (ONLY FOR LIVE)
+    if (payout.environment === "LIVE") {
       await createLedgerEntry({
-        amount: feeAndTax,
+        amount: payout.amount,
         creditAccountId: wallet.ledgerAccountId,
-        debitAccountId: revenueAccount.id,
-        purpose: LedgerEntryPurpose.REVERSAL_FEE_AND_TAX,
+        debitAccountId: transitAccount.id,
+        purpose: LedgerEntryPurpose.REVERSAL_PRINCIPAL,
         referenceType: ReferenceType.PAYOUT,
         referenceId: payout.id,
         payoutId: payout.id,
-        description: "Payout Reversal Fee & Tax",
+        description: "Payout Reversal Principal",
       }, tx);
-    }
 
-    // Adjust Wallet Back
-    await adjustWalletBalance(
-      wallet.id,
-      merchantProfileId,
-      payout.totalDebitAmount, // POSITIVE amount to refund
-      wallet.version,
-      tx
-    );
+      const feeAndTax = payout.fee.add(payout.tax);
+      if (feeAndTax.gt(0)) {
+        await createLedgerEntry({
+          amount: feeAndTax,
+          creditAccountId: wallet.ledgerAccountId,
+          debitAccountId: revenueAccount.id,
+          purpose: LedgerEntryPurpose.REVERSAL_FEE_AND_TAX,
+          referenceType: ReferenceType.PAYOUT,
+          referenceId: payout.id,
+          payoutId: payout.id,
+          description: "Payout Reversal Fee & Tax",
+        }, tx);
+      }
+
+      // Adjust Wallet Back
+      await adjustWalletBalance(
+        wallet.id,
+        merchantProfileId,
+        payout.totalDebitAmount, // POSITIVE amount to refund
+        wallet.version,
+        tx
+      );
+    }
 
     await logAction({
       actorType: AuditActorType.SYSTEM,

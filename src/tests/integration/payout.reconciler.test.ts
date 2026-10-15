@@ -13,6 +13,8 @@ describe("PayoutReconciler", () => {
   let walletId: string;
 
   beforeAll(async () => {
+    
+
     // Heavy cleanup once per suite
     await db.auditLog.deleteMany({});
     await db.ledgerEntry.deleteMany({});
@@ -56,8 +58,8 @@ describe("PayoutReconciler", () => {
         neftPayoutFee: new Prisma.Decimal(3),
         rtgsPayoutFee: new Prisma.Decimal(10),
         taxPercentage: new Prisma.Decimal(18),
-        minPayoutAmount: new Prisma.Decimal(10),
-        maxPayoutAmount: new Prisma.Decimal(500000),
+        minPayoutAmount: 1,
+        maxPayoutAmount: 10000000,
         reconciliationThresholdMins: 0,
       },
       update: {
@@ -94,7 +96,7 @@ describe("PayoutReconciler", () => {
     
     const payout = await db.payout.create({
       data: {
-        merchantProfileId: merchantId,
+        merchantProfileId: merchantId, environment: "TEST",
         idempotencyKey: `stale_${status}_${Date.now()}`,
         amount: new Prisma.Decimal(100),
         totalDebitAmount: new Prisma.Decimal(100),
@@ -172,6 +174,70 @@ describe("PayoutReconciler", () => {
     expect(updatedPayout?.status).toBe(PayoutStatus.PROCESSING);
   });
 
+  it("respects different thresholds for LIVE (15m) and TEST (10s)", async () => {
+    InMemoryPayoutProvider.nextStatusOutcome = "SUCCESS";
+
+    const past20s = new Date(Date.now() - 20 * 1000);
+    const testPayout = await db.payout.create({
+      data: {
+        merchantProfileId: merchantId, environment: "TEST",
+        idempotencyKey: "test_recent_" + Date.now(),
+        amount: new Prisma.Decimal(100), totalDebitAmount: new Prisma.Decimal(100),
+        accountNumber: "123", ifscCode: "ABC", paymentMode: "IMPS", status: "PROCESSING",
+        updatedAt: past20s,
+      }
+    });
+
+    const past5m = new Date(Date.now() - 5 * 60 * 1000);
+    const livePayout = await db.payout.create({
+      data: {
+        merchantProfileId: merchantId, environment: "LIVE",
+        idempotencyKey: "live_recent_" + Date.now(),
+        amount: new Prisma.Decimal(100), totalDebitAmount: new Prisma.Decimal(100),
+        accountNumber: "123", ifscCode: "ABC", paymentMode: "IMPS", status: "PROCESSING",
+        updatedAt: past5m,
+      }
+    });
+
+    const past20m = new Date(Date.now() - 20 * 60 * 1000);
+    const liveStalePayout = await db.payout.create({
+      data: {
+        merchantProfileId: merchantId, environment: "LIVE",
+        idempotencyKey: "live_stale_" + Date.now(),
+        amount: new Prisma.Decimal(100), totalDebitAmount: new Prisma.Decimal(100),
+        accountNumber: "123", ifscCode: "ABC", paymentMode: "IMPS", status: "PROCESSING",
+        updatedAt: past20m,
+      }
+    });
+
+    await db.systemSetting.update({
+      where: { id: "GLOBAL_SETTINGS" },
+      data: { reconciliationThresholdMins: 15 }
+    });
+
+    const result = await PayoutReconciler.reconcileStalePayouts("worker-1");
+    
+    expect(result?.processingSettled).toBe(1); // The TEST one settles
+
+    const testUpdated = await db.payout.findUnique({ where: { id: testPayout.id } });
+    expect(testUpdated?.status).toBe("SUCCESS");
+
+    const liveUpdated = await db.payout.findUnique({ where: { id: livePayout.id } });
+    expect(liveUpdated?.status).toBe("PROCESSING");
+
+    // The liveStalePayout was picked up, but because there's no real LIVE provider set up here, 
+    // it will either be unresolved or error out. 
+    // We just check that it's still PROCESSING or FAILED or whatever, but the key is that it was processed 
+    // which means it's either in errors or unresolved.
+    const wasLiveStaleProcessed = (result?.errors ?? 0) > 0 || (result?.processingUnresolved ?? 0) > 0;
+    expect(wasLiveStaleProcessed).toBe(true);
+    
+    await db.systemSetting.update({
+      where: { id: "GLOBAL_SETTINGS" },
+      data: { reconciliationThresholdMins: 0 }
+    });
+  });
+
   it("skips running if lease is already held by another worker", async () => {
     await acquireSystemLease("PAYOUT_RECONCILER", "worker-other", 300);
 
@@ -179,3 +245,5 @@ describe("PayoutReconciler", () => {
     expect(result).toBeNull(); // Lease not acquired
   });
 });
+
+

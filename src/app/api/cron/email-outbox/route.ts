@@ -1,3 +1,4 @@
+import { logger } from "@/infrastructure/logger/logger";
 
 import { NextRequest, NextResponse } from "next/server";
 import { env } from "@/config/env";
@@ -18,7 +19,7 @@ export async function GET(req: NextRequest) {
     await processEmailOutbox(workerId);
     return NextResponse.json({ success: true });
   } catch (e) {
-    console.error("Email Outbox Cron Error:", e);
+    logger.error("Email Outbox Cron Error:", e);
     // Do not leak secrets or error details
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }

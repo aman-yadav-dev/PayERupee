@@ -45,9 +45,13 @@ Fill in your PostgreSQL and Better Auth connection strings.
 
 ### 3. Initialize Database
 ```bash
-npx prisma db push
+npx prisma migrate deploy
 npx prisma generate
 ```
+
+> **Important:** For initial local development and production deployments, `npx prisma migrate deploy` must be used so that partial unique indexes (e.g. `WHERE status = 'ACTIVE'` or `WHERE status = 'PENDING'`) are applied and preserved.
+>
+> **Warning:** Avoid using `npx prisma db push` in environments with partial unique indexes, as Prisma schema synchronization does not support native PostgreSQL partial unique index clauses and can drop them.
 
 ### 4. Run Development Server
 ```bash

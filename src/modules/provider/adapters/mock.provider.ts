@@ -16,11 +16,12 @@ export class InMemoryPayoutProvider implements IPayoutProvider {
   async dispatch(
     payoutId: string,
     amount: string,
-    accountNumber: string,
-    ifscCode: string,
+    accountNumber: string | null,
+    ifscCode: string | null,
     mode: string,
-    accountHolderName: string,
-    beneficiaryPhone?: string | null
+    accountHolderName: string | null,
+    beneficiaryPhone?: string | null,
+    vpa?: string | null
   ): Promise<ProviderDispatchResult> {
     if (InMemoryPayoutProvider.latencyMs > 0) {
       await new Promise(r => setTimeout(r, InMemoryPayoutProvider.latencyMs));
@@ -65,10 +66,34 @@ export class InMemoryPayoutProvider implements IPayoutProvider {
       await new Promise(r => setTimeout(r, InMemoryPayoutProvider.latencyMs));
     }
     
+    let outcome = InMemoryPayoutProvider.nextStatusOutcome;
+
+    // Simulate asynchronous completion for manual TEST transactions 
+    // without breaking explicit test overrides
+    if (outcome === "QUEUED") {
+      try {
+        // We import dynamically to avoid initialization issues if provider is imported outside Next.js
+        const { db } = await import("@/infrastructure/database/db");
+        const payout = await db.payout.findUnique({ 
+          where: { id: payoutId }, 
+          select: { createdAt: true } 
+        });
+        
+        if (payout) {
+          const ageMs = Date.now() - payout.createdAt.getTime();
+          if (ageMs >= 5000) { // 5 second simulated delay
+            outcome = "SUCCESS";
+          }
+        }
+      } catch (e) {
+        // Fallback to QUEUED if DB access fails in a mocked test environment
+      }
+    }
+
     return {
-      outcome: InMemoryPayoutProvider.nextStatusOutcome,
+      outcome,
       providerReference: providerReference || `MOCK_REF_${payoutId}`,
-      failureReason: InMemoryPayoutProvider.nextStatusOutcome === "REJECTED" ? "Mock status failed" : undefined
+      failureReason: outcome === "REJECTED" ? "Mock status failed" : undefined
     };
   }
 

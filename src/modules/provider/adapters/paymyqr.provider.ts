@@ -1,6 +1,7 @@
 import { IPayoutProvider, ProviderDispatchResult, NormalizedWebhookEvent } from "@/modules/provider/core/provider.interface";
 import { env } from "@/config/env";
 import https from "https";
+import { logger } from "@/infrastructure/logger/logger";
 
 export class PayMyQrPayoutProvider implements IPayoutProvider {
   private getBaseUrl() {
@@ -14,6 +15,56 @@ export class PayMyQrPayoutProvider implements IPayoutProvider {
     if (token) redacted = redacted.split(token).join("[REDACTED_TOKEN]");
     if (vendor) redacted = redacted.split(vendor).join("[REDACTED_VENDOR]");
     return redacted;
+  }
+
+
+  private redactText(text: string, accountNumber: string | null = null, ifscCode: string | null = null, vpa: string | null = null): string {
+    let redacted = this.redactError(text);
+    if (accountNumber && accountNumber.length > 4) {
+      redacted = redacted.split(accountNumber).join("[REDACTED_ACCOUNT]");
+    }
+    if (ifscCode) redacted = redacted.split(ifscCode).join("[REDACTED_IFSC]");
+    if (vpa) redacted = redacted.split(vpa).join("[REDACTED_VPA]");
+    return redacted;
+  }
+
+  private sanitizeObject(obj: any, accountNumber: string | null, ifscCode: string | null, vpa: string | null) {
+    if (!obj || typeof obj !== "object") return;
+    for (const key of Object.keys(obj)) {
+      if (typeof obj[key] === "string") {
+        obj[key] = this.redactText(obj[key], accountNumber, ifscCode, vpa);
+      } else if (typeof obj[key] === "object") {
+        this.sanitizeObject(obj[key], accountNumber, ifscCode, vpa);
+      }
+    }
+  }
+
+  private buildFailureDetails(
+    httpStatus: number | null,
+    parsedBody: any,
+    rawBody: string,
+    providerReference: string | null = null,
+    accountNumber: string | null = null,
+    ifscCode: string | null = null,
+    vpa: string | null = null
+  ) {
+    let details: any = null;
+    
+    if (parsedBody && Object.keys(parsedBody).length > 0) {
+       details = JSON.parse(JSON.stringify(parsedBody));
+       this.sanitizeObject(details, accountNumber, ifscCode, vpa);
+    } else if (rawBody) {
+       details = this.redactText(rawBody, accountNumber, ifscCode, vpa);
+    }
+
+    return {
+      provider: "PAYMYQR",
+      httpStatus,
+      errorCode: (parsedBody?.error_code || parsedBody?.code || parsedBody?.status) ? this.redactText(String(parsedBody?.error_code || parsedBody?.code || parsedBody?.status), accountNumber, ifscCode, vpa) : null,
+      errorMessage: (parsedBody?.message || parsedBody?.user_message) ? this.redactText(String(parsedBody?.message || parsedBody?.user_message), accountNumber, ifscCode, vpa) : null,
+      providerReference: providerReference ? this.redactText(String(providerReference), accountNumber, ifscCode, vpa) : null,
+      details
+    };
   }
 
   private httpRequest(options: https.RequestOptions, body?: string): Promise<{ statusCode: number, body: string }> {
@@ -45,11 +96,12 @@ export class PayMyQrPayoutProvider implements IPayoutProvider {
   async dispatch(
     payoutId: string, // this is the original internal payout ID -> becomes click_id
     amount: string,
-    accountNumber: string,
-    ifscCode: string,
+    accountNumber: string | null,
+    ifscCode: string | null,
     mode: string,
-    accountHolderName: string,
-    beneficiaryPhone?: string | null
+    accountHolderName: string | null,
+    beneficiaryPhone?: string | null,
+    vpa?: string | null
   ): Promise<ProviderDispatchResult> {
     const modeLower = mode.toLowerCase();
     if (modeLower !== "upi" && modeLower !== "imps") {
@@ -60,26 +112,26 @@ export class PayMyQrPayoutProvider implements IPayoutProvider {
     const token = env.PAYMYQR_SECURITY_TOKEN || "";
     const vendor = env.PAYMYQR_VENDOR_ID || "";
 
-    const params = new URLSearchParams();
-    params.append("vendor", vendor);
+    const searchParams = new URLSearchParams({
+      vendor,
+      amount: amount.toString(),
+      click_id: payoutId,
+      goal_id: "payout",
+      remarks: "Payout",
+      security_token: token
+    });
 
     if (modeLower === "upi") {
-      params.append("transfer_mode", "upi");
-      params.append("upi", accountNumber);
+      searchParams.append("transfer_mode", "upi");
+      searchParams.append("upi", vpa || "");
     } else {
-      params.append("transfer_mode", "imps");
-      params.append("bank_account", accountNumber);
-      params.append("bank_ifsc", ifscCode);
-      params.append("beneficiary_name", accountHolderName);
+      searchParams.append("transfer_mode", "imps");
+      searchParams.append("bank_account", accountNumber || "");
+      searchParams.append("bank_ifsc", ifscCode || "");
+      searchParams.append("beneficiary_name", accountHolderName || "");
     }
 
-    params.append("amount", amount.toString());
-    params.append("click_id", payoutId); // STRICT RULE: same payout retains exactly the same click_id
-    params.append("goal_id", "payout");
-    params.append("remarks", "Payout");
-    params.append("security_token", token);
-
-    const urlString = `${baseUrl}/transactions/batch?${params.toString()}`;
+    const urlString = `${baseUrl}/transactions/batch?${searchParams.toString()}`;
     const url = new URL(urlString);
 
     const options: https.RequestOptions = {
@@ -87,8 +139,8 @@ export class PayMyQrPayoutProvider implements IPayoutProvider {
       port: url.port || 443,
       path: url.pathname + url.search,
       method: "GET",
-      family: 4, // FORCED IPv4
-      timeout: 15000
+      family: 4,
+      timeout: 15000,
     };
 
     try {
@@ -128,7 +180,9 @@ export class PayMyQrPayoutProvider implements IPayoutProvider {
       // Any other validation failures (4xx / 500 IP validation)
       if (parsed.status === "error" || (res.statusCode >= 400 && res.statusCode < 500)) {
          if (parsed.message === "IP validation failed") {
-             return { outcome: "REJECTED", failureReason: "IP validation failed" };
+             const providerFailureDetails = this.buildFailureDetails(res.statusCode, parsed, res.body, null, accountNumber, ifscCode, vpa);
+             logger.error("PayMyQR provider IP validation failed", providerFailureDetails);
+             return { outcome: "REJECTED", failureReason: "IP validation failed", providerFailureDetails };
          }
          
          if (res.statusCode === 500 && !parsed.message) {
@@ -136,7 +190,9 @@ export class PayMyQrPayoutProvider implements IPayoutProvider {
             return { outcome: "NETWORK_ERROR", failureReason: "Provider 500 Error" };
          }
          
-         return { outcome: "REJECTED", failureReason: parsed.message || `Provider returned HTTP ${res.statusCode}` };
+         const providerFailureDetails = this.buildFailureDetails(res.statusCode, parsed, res.body, null, accountNumber, ifscCode, vpa);
+         logger.error("PayMyQR provider rejected payout", providerFailureDetails); 
+         return { outcome: "REJECTED", failureReason: "Payment provider rejected the payout request", providerFailureDetails };
       }
 
       // 5xx network or ambiguous timeout
@@ -204,7 +260,9 @@ export class PayMyQrPayoutProvider implements IPayoutProvider {
         } else if (currentStatus === "processing") {
           return { outcome: "QUEUED", providerReference: ref };
         } else if (currentStatus === "validation_failed" || currentStatus === "failed" || currentStatus === "cancelled") {
-          return { outcome: "REJECTED", failureReason: txData.user_message || currentStatus, providerReference: ref };
+          const providerFailureDetails = this.buildFailureDetails(res.statusCode, parsed, res.body, ref);
+          logger.error("PayMyQR provider failed payout status", providerFailureDetails); 
+          return { outcome: "REJECTED", failureReason: "Payment provider failed to process the payout", providerReference: ref, providerFailureDetails };
         } else {
            return { outcome: "QUEUED", providerReference: ref };
         }

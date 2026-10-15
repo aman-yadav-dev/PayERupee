@@ -55,3 +55,14 @@ next-env.d.ts
 
 # local private storage
 .storage
+
+# scratch, logs and test output
+*.png
+*.broken
+*.pulled
+*.log
+patch*.js
+test_output.txt
+scripts/*.py
+*.cmd
+

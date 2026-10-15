@@ -1,3 +1,4 @@
+import { logger } from "@/infrastructure/logger/logger";
 import { NextRequest, NextResponse } from "next/server";
 import { env } from "@/config/env";
 import { processOutbox } from "@/modules/payout/application/outbox.processor";
@@ -15,11 +16,10 @@ export async function GET(req: NextRequest) {
   const workerId = `cron-outbox-${randomUUID()}`;
   
   try {
-    const provider = getPayoutProvider();
-    await processOutbox(workerId, provider);
+    await processOutbox(workerId);
     return NextResponse.json({ success: true, workerId });
   } catch (e) {
-    console.error("Outbox Cron Error:", e);
+    logger.error("Outbox Cron Error:", e);
     // Do not leak secrets or error details
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }

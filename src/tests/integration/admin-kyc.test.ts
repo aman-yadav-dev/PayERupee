@@ -9,6 +9,7 @@ import { GET as getDetail } from "@/app/api/v1/admin/kyc/applications/[applicati
 import { POST as approveApp } from "@/app/api/v1/admin/kyc/applications/[applicationId]/approve/route";
 import { POST as rejectApp } from "@/app/api/v1/admin/kyc/applications/[applicationId]/reject/route";
 import { GET as downloadDoc } from "@/app/api/v1/admin/kyc/applications/[applicationId]/documents/[documentId]/download/route";
+import { getKycApplicationDetail } from "@/modules/admin/application/admin-kyc.service";
 
 vi.mock("@/modules/auth/infrastructure/auth", () => ({
   auth: {
@@ -199,6 +200,219 @@ describe("Admin KYC Workflow (Phase C5)", () => {
       expect(json.data.documents.length).toBe(1);
       expect(json.data.documents[0].originalFilename).toBe("test.pdf");
       expect(json.data.documents[0].storageKey).toBeUndefined(); // ensure stripped
+    });
+
+    it("returns enriched questionnaire answers with human-readable question labels", async () => {
+      mockAdminSession();
+      const app = await createKycApp(KycStatus.UNDER_REVIEW);
+
+      const answerFieldId = "answer-field-" + app.merchantProfileId;
+      await db.kycFieldDefinition.create({
+        data: {
+          id: answerFieldId,
+          formVersionId: app.cycles[0].formVersionId!,
+          key: "business_registration_number",
+          label: "Business Registration Number",
+          description: "Enter your official company registration number",
+          dataType: "STRING",
+          inputType: "TEXT",
+          isRequired: true,
+          section: "IDENTITY",
+          orderIndex: 2
+        }
+      });
+
+      await db.kycAnswer.create({
+        data: {
+          submissionCycleId: app.cycles[0].id,
+          fieldDefinitionId: answerFieldId,
+          value: "REG-99887766"
+        }
+      });
+
+      const req = new NextRequest("http://localhost/api/v1/admin/kyc/applications/" + app.id);
+      const res = await getDetail(req, { params: Promise.resolve({ applicationId: app.id }) as any });
+      expect(res.status).toBe(200);
+
+      const json = await res.json();
+      expect(json.data.answers).toBeDefined();
+      expect(json.data.answers.length).toBe(1);
+
+      const ans = json.data.answers[0];
+      expect(ans.fieldDefinitionId).toBe(answerFieldId);
+      expect(ans.fieldLabel).toBe("Business Registration Number");
+      expect(ans.fieldKey).toBe("business_registration_number");
+      expect(ans.section).toBe("IDENTITY");
+      expect(ans.dataType).toBe("STRING");
+      expect(ans.value).toBe("REG-99887766");
+      expect(ans.isUnmapped).toBe(false);
+    });
+
+    it("maps known field IDs (company_name, pan_number, aadhaar_number) directly to human-readable labels", async () => {
+      mockAdminSession();
+      const app = await createKycApp(KycStatus.UNDER_REVIEW);
+      const formVersionId = app.cycles[0].formVersionId!;
+
+      const knownFields = [
+        { id: "company_name_" + app.merchantProfileId, key: "company_name", label: "Company Name", orderIndex: 1, value: "PayERupee Ltd" },
+        { id: "pan_number_" + app.merchantProfileId, key: "pan_number", label: "PAN Number", orderIndex: 2, value: "ABCDE1234F" },
+        { id: "aadhaar_number_" + app.merchantProfileId, key: "aadhaar_number", label: "Aadhaar Number", orderIndex: 3, value: "999988887777" },
+        { id: "gst_key_only_" + app.merchantProfileId, key: "gst_number", label: "", orderIndex: 4, value: "22AAAAA0000A1Z5" },
+      ];
+
+      for (const f of knownFields) {
+        await db.kycFieldDefinition.create({
+          data: {
+            id: f.id,
+            formVersionId,
+            key: f.key,
+            label: f.label,
+            dataType: "STRING",
+            inputType: "TEXT",
+            isRequired: true,
+            section: "IDENTITY",
+            orderIndex: f.orderIndex,
+          }
+        });
+
+        await db.kycAnswer.create({
+          data: {
+            submissionCycleId: app.cycles[0].id,
+            fieldDefinitionId: f.id,
+            value: f.value,
+          }
+        });
+      }
+
+      const req = new NextRequest("http://localhost/api/v1/admin/kyc/applications/" + app.id);
+      const res = await getDetail(req, { params: Promise.resolve({ applicationId: app.id }) as any });
+      expect(res.status).toBe(200);
+
+      const json = await res.json();
+      expect(json.data.answers).toBeDefined();
+
+      const companyAns = json.data.answers.find((a: any) => a.fieldDefinitionId === "company_name_" + app.merchantProfileId);
+      expect(companyAns).toBeDefined();
+      expect(companyAns.fieldLabel).toBe("Company Name");
+      expect(companyAns.isUnmapped).toBe(false);
+
+      const panAns = json.data.answers.find((a: any) => a.fieldDefinitionId === "pan_number_" + app.merchantProfileId);
+      expect(panAns).toBeDefined();
+      expect(panAns.fieldLabel).toBe("PAN Number");
+      expect(panAns.isUnmapped).toBe(false);
+
+      const aadhaarAns = json.data.answers.find((a: any) => a.fieldDefinitionId === "aadhaar_number_" + app.merchantProfileId);
+      expect(aadhaarAns).toBeDefined();
+      expect(aadhaarAns.fieldLabel).toBe("Aadhaar Number");
+      expect(aadhaarAns.isUnmapped).toBe(false);
+
+      // Humanized key fallback when label is empty
+      const gstKeyOnlyAns = json.data.answers.find((a: any) => a.fieldDefinitionId === "gst_key_only_" + app.merchantProfileId);
+      expect(gstKeyOnlyAns).toBeDefined();
+      expect(gstKeyOnlyAns.fieldLabel).toBe("GST Number");
+      expect(gstKeyOnlyAns.isUnmapped).toBe(false);
+    });
+
+    it("resolves historical field definitions not in the current form version via kycFieldDefinition lookup", async () => {
+      mockAdminSession();
+      const app = await createKycApp(KycStatus.UNDER_REVIEW);
+
+      // Create a separate historical form version with a historical field
+      const histForm = await db.kycForm.create({
+        data: { name: "Historical Form " + Math.random().toString(36).substring(7) }
+      });
+      const histVersion = await db.kycFormVersion.create({
+        data: {
+          formId: histForm.id,
+          versionNumber: 88,
+          status: "DEPRECATED"
+        }
+      });
+
+      const histFieldId = "hist-field-" + Math.random().toString(36).substring(7);
+      await db.kycFieldDefinition.create({
+        data: {
+          id: histFieldId,
+          formVersionId: histVersion.id, // Different from app's cycle formVersionId
+          key: "historical_tax_id",
+          label: "Historical Tax ID",
+          dataType: "STRING",
+          inputType: "TEXT",
+          isRequired: false,
+          section: "TAX_DETAILS",
+          orderIndex: 8
+        }
+      });
+
+      await db.kycAnswer.create({
+        data: {
+          submissionCycleId: app.cycles[0].id,
+          fieldDefinitionId: histFieldId,
+          value: "TAX-LEGACY-4455"
+        }
+      });
+
+      const req = new NextRequest("http://localhost/api/v1/admin/kyc/applications/" + app.id);
+      const res = await getDetail(req, { params: Promise.resolve({ applicationId: app.id }) as any });
+      expect(res.status).toBe(200);
+
+      const json = await res.json();
+      const histAns = json.data.answers.find((a: any) => a.fieldDefinitionId === histFieldId);
+      expect(histAns).toBeDefined();
+      expect(histAns.fieldLabel).toBe("Historical Tax ID");
+      expect(histAns.fieldKey).toBe("historical_tax_id");
+      expect(histAns.section).toBe("TAX DETAILS");
+      expect(histAns.isUnmapped).toBe(false);
+      expect(histAns.value).toBe("TAX-LEGACY-4455");
+    });
+
+    it("cleanly assigns fieldLabel 'Unmapped field' and isUnmapped: true for orphan/unknown field IDs without throwing or crashing", async () => {
+      mockAdminSession();
+      const app = await createKycApp(KycStatus.UNDER_REVIEW);
+
+      const orphanFieldId = "orphan-field-" + Math.random().toString(36).substring(7);
+      const answerId = "orphan-ans-" + Math.random().toString(36).substring(7);
+
+      // Drop FK constraint if present to permit inserting orphan answer row in integration test
+      await db.$executeRawUnsafe(`ALTER TABLE "kyc_answers" DROP CONSTRAINT IF EXISTS "kyc_answers_fieldDefinitionId_fkey";`);
+
+      try {
+        await db.$executeRawUnsafe(
+          `INSERT INTO "kyc_answers" ("id", "submissionCycleId", "fieldDefinitionId", "value", "createdAt", "updatedAt")
+           VALUES ($1, $2, $3, $4::jsonb, NOW(), NOW())`,
+          answerId,
+          app.cycles[0].id,
+          orphanFieldId,
+          JSON.stringify("Orphan KYC Value")
+        );
+
+        // Test API detail route
+        const req = new NextRequest("http://localhost/api/v1/admin/kyc/applications/" + app.id);
+        const res = await getDetail(req, { params: Promise.resolve({ applicationId: app.id }) as any });
+        expect(res.status).toBe(200);
+
+        const json = await res.json();
+        const orphanAns = json.data.answers.find((a: any) => a.fieldDefinitionId === orphanFieldId);
+        expect(orphanAns).toBeDefined();
+        expect(orphanAns.fieldLabel).toBe("Unmapped field");
+        expect(orphanAns.isUnmapped).toBe(true);
+        expect(orphanAns.fieldDefinitionId).toBe(orphanFieldId);
+        expect(orphanAns.value).toBe("Orphan KYC Value");
+
+        // Test direct service function
+        const detailFromService = await getKycApplicationDetail(app.id);
+        const orphanFromService = detailFromService.answers.find((a) => a.fieldDefinitionId === orphanFieldId);
+        expect(orphanFromService).toBeDefined();
+        expect(orphanFromService!.fieldLabel).toBe("Unmapped field");
+        expect(orphanFromService!.isUnmapped).toBe(true);
+      } finally {
+        await db.$executeRawUnsafe(`DELETE FROM "kyc_answers" WHERE "id" = $1;`, answerId).catch(() => {});
+        await db.$executeRawUnsafe(
+          `ALTER TABLE "kyc_answers" ADD CONSTRAINT "kyc_answers_fieldDefinitionId_fkey"
+           FOREIGN KEY ("fieldDefinitionId") REFERENCES "kyc_field_definitions"("id")
+           ON DELETE RESTRICT ON UPDATE CASCADE;`
+        ).catch(() => {});
+      }
     });
 
     it("404 for missing application", async () => {

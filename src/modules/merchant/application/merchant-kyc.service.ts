@@ -1,3 +1,4 @@
+import { logger } from "@/infrastructure/logger/logger";
 import { db } from "@/infrastructure/database/db";
 import { LocalDiskStorageAdapter } from "@/infrastructure/storage/local-disk.adapter";
 import { logAction } from "@/modules/audit/domain/audit.service";
@@ -420,9 +421,9 @@ export async function uploadKycDocument(
     return updatedDoc;
   } catch (e: any) {
     if (physicalUploadSucceeded) {
-      await storageProvider.delete(storageKey).catch(console.error);
+      await storageProvider.delete(storageKey).catch((e) => logger.error('Unhandled promise rejection', e));
     }
-    await db.kycDocument.delete({ where: { id: docRecord.id } }).catch(console.error);
+    await db.kycDocument.delete({ where: { id: docRecord.id } }).catch((e) => logger.error('Unhandled promise rejection', e));
     throw e;
   }
 }
@@ -929,7 +930,7 @@ export async function resubmitKycApplication(merchantProfileId: string) {
   } catch (e: any) {
     // If transaction fails or any copy fails, rollback physical copies
     for (const key of copiedStorageKeys) {
-      await storageProvider.delete(key).catch(console.error);
+      await storageProvider.delete(key).catch((e) => logger.error('Unhandled promise rejection', e));
     }
     throw e;
   }

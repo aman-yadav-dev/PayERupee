@@ -51,6 +51,7 @@ enum DocumentUploadStatus {
 
 enum UserRole {
   ADMIN
+  SUPER_ADMIN
   MERCHANT
 }
 
@@ -109,6 +110,7 @@ enum LedgerEntryPurpose {
 }
 
 enum ReferenceType {
+  WITHDRAWAL
   FUND_REQUEST
   PAYOUT
   SYSTEM
@@ -200,14 +202,21 @@ model User {
 
   merchantProfile MerchantProfile?
 
-  createdApiKeys      ApiKey[]         @relation("AdminCreatedApiKeys")
-  createdFundRequests FundRequest[]    @relation("AdminCreatedFundRequests")
-  approvedRequests    FundRequest[]    @relation("AdminFundApprovals")
-  adminBlacklists     Blacklist[]      @relation("AdminBlacklists")
-  supportMessages     SupportMessage[] @relation("UserSupportMessages")
-  settingsUpdates     SystemSetting[]  @relation("AdminSettingsUpdates")
-  reviewedKycCycles KycSubmissionCycle[] @relation("AdminKycReviews")
+  createdApiKeys         ApiKey[]                @relation("AdminCreatedApiKeys")
+  createdFundRequests    FundRequest[]           @relation("AdminCreatedFundRequests")
+  approvedRequests       FundRequest[]           @relation("AdminFundApprovals")
+  adminBlacklists        Blacklist[]             @relation("AdminBlacklists")
+  supportMessages        SupportMessage[]        @relation("UserSupportMessages")
+  settingsUpdates        SystemSetting[]         @relation("AdminSettingsUpdates")
+  reviewedKycCycles      KycSubmissionCycle[]    @relation("AdminKycReviews")
   notificationPreference NotificationPreference?
+
+  createdMerchantBans         MerchantBan[]      @relation("MerchantBanCreatedBy")
+  unbannedMerchantBans        MerchantBan[]      @relation("MerchantBanUnbannedBy")
+  createdGlobalBanRequests    GlobalBanRequest[] @relation("GlobalBanRequestCreatedBy")
+  reviewedGlobalBanRequests   GlobalBanRequest[] @relation("GlobalBanRequestReviewedBy")
+  approvedGlobalBans          GlobalBan[]        @relation("GlobalBanApprovedBy")
+  removedGlobalBans           GlobalBan[]        @relation("GlobalBanRemovedBy")
 
   @@map("users")
 }
@@ -220,7 +229,7 @@ model NotificationPreference {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notification_preferences")
 }
@@ -297,148 +306,155 @@ model MerchantProfile {
   wallet         Wallet?
   ledgerAccounts LedgerAccount[]
 
-  apiKeys        ApiKey[]
-  payouts        Payout[]
-  fundRequests   FundRequest[]
-  blacklists     Blacklist[]
-  supportTickets SupportTicket[]
+  apiKeys                  ApiKey[]
+  payouts                  Payout[]
+  fundRequests             FundRequest[]
+  blacklists               Blacklist[]
+  supportTickets           SupportTicket[]
+  notifications            Notification[]
+  merchantBanks            MerchantBank[]
+  withdrawals              Withdrawal[]
+  merchantSecuritySettings MerchantSecuritySettings?
+  securityEvents           SecurityEvent[]
+  merchantBans             MerchantBan[]
+  globalBanRequests        GlobalBanRequest[]
 
   @@index([deletedAt])
   @@map("merchant_profiles")
 }
 
 model KycApplication {
-  id                String    @id @default(cuid())
-  merchantProfileId String    @unique
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id                String   @id @default(cuid())
+  merchantProfileId String   @unique
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  merchantProfile MerchantProfile @relation(fields: [merchantProfileId], references: [id], onDelete: Restrict)
+  merchantProfile MerchantProfile      @relation(fields: [merchantProfileId], references: [id], onDelete: Restrict)
   cycles          KycSubmissionCycle[]
 
   @@map("kyc_applications")
 }
 
 model KycSubmissionCycle {
-  id                String    @id @default(cuid())
-  applicationId     String
-  formVersionId     String
-  cycleNumber       Int
-  isCurrentCycle    Boolean   @default(true)
-  status            KycStatus @default(PENDING_SUBMISSION)
+  id             String    @id @default(cuid())
+  applicationId  String
+  formVersionId  String
+  cycleNumber    Int
+  isCurrentCycle Boolean   @default(true)
+  status         KycStatus @default(PENDING_SUBMISSION)
 
-  rejectionReason   String?   @db.Text
-  allowResubmission Boolean   @default(false)
+  rejectionReason   String? @db.Text
+  allowResubmission Boolean @default(false)
   reviewerId        String?
 
-  submittedAt       DateTime?
-  reviewedAt        DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  submittedAt DateTime?
+  reviewedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  application       KycApplication  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  formVersion       KycFormVersion  @relation(fields: [formVersionId], references: [id], onDelete: Restrict)
-  reviewer          User?           @relation("AdminKycReviews", fields: [reviewerId], references: [id], onDelete: SetNull)
+  application KycApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  formVersion KycFormVersion @relation(fields: [formVersionId], references: [id], onDelete: Restrict)
+  reviewer    User?          @relation("AdminKycReviews", fields: [reviewerId], references: [id], onDelete: SetNull)
 
-  answers           KycAnswer[]
-  documents         KycDocument[]
+  answers   KycAnswer[]
+  documents KycDocument[]
 
   @@unique([applicationId, cycleNumber])
   @@index([applicationId, isCurrentCycle])
   @@map("kyc_submission_cycles")
 }
 
-
 model KycForm {
-  id          String           @id @default(cuid())
-  name        String
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  
-  versions    KycFormVersion[]
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  versions KycFormVersion[]
+
   @@map("kyc_forms")
 }
 
 model KycFormVersion {
-  id            String             @id @default(cuid())
+  id            String        @id @default(cuid())
   formId        String
   versionNumber Int
-  status        KycFormStatus      @default(DRAFT)
-  
-  publishedAt   DateTime?
-  createdAt     DateTime           @default(now())
-  
-  form          KycForm            @relation(fields: [formId], references: [id], onDelete: Restrict)
-  fields        KycFieldDefinition[]
-  cycles        KycSubmissionCycle[]
-  
+  status        KycFormStatus @default(DRAFT)
+
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  form   KycForm              @relation(fields: [formId], references: [id], onDelete: Restrict)
+  fields KycFieldDefinition[]
+  cycles KycSubmissionCycle[]
+
   @@unique([formId, versionNumber])
   @@map("kyc_form_versions")
 }
 
 model KycFieldDefinition {
-  id              String         @id @default(cuid())
-  formVersionId   String
-  key             String
-  label           String
-  description     String?
-  section         String
-  
-  dataType        KycDataType
-  inputType       KycInputType
-  
-  isRequired      Boolean        @default(true)
-  applicableTypes MerchantType[] 
+  id            String  @id @default(cuid())
+  formVersionId String
+  key           String
+  label         String
+  description   String?
+  section       String
 
-  validationRules Json?          
-  selectOptions   Json?          
-  fileRules       Json?          
-  
-  orderIndex      Int            @default(0)
-  
-  formVersion     KycFormVersion @relation(fields: [formVersionId], references: [id], onDelete: Cascade)
-  answers         KycAnswer[]
-  documents       KycDocument[]
-  
+  dataType  KycDataType
+  inputType KycInputType
+
+  isRequired      Boolean        @default(true)
+  applicableTypes MerchantType[]
+
+  validationRules Json?
+  selectOptions   Json?
+  fileRules       Json?
+
+  orderIndex Int @default(0)
+
+  formVersion KycFormVersion @relation(fields: [formVersionId], references: [id], onDelete: Cascade)
+  answers     KycAnswer[]
+  documents   KycDocument[]
+
   @@unique([formVersionId, key])
   @@map("kyc_field_definitions")
 }
 
 model KycAnswer {
-  id                String             @id @default(cuid())
+  id                String @id @default(cuid())
   submissionCycleId String
   fieldDefinitionId String
-  
-  value             Json               
-  
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
 
-  cycle             KycSubmissionCycle @relation(fields: [submissionCycleId], references: [id], onDelete: Cascade)
-  fieldDefinition   KycFieldDefinition @relation(fields: [fieldDefinitionId], references: [id], onDelete: Restrict)
+  value Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cycle           KycSubmissionCycle @relation(fields: [submissionCycleId], references: [id], onDelete: Cascade)
+  fieldDefinition KycFieldDefinition @relation(fields: [fieldDefinitionId], references: [id], onDelete: Restrict)
 
   @@unique([submissionCycleId, fieldDefinitionId])
   @@map("kyc_answers")
 }
 
 model KycDocument {
-  id                String               @id @default(cuid())
+  id                String @id @default(cuid())
   submissionCycleId String
   fieldDefinitionId String
-  
-  storageKey        String               @unique 
-  status            DocumentUploadStatus @default(PENDING)
-  
-  originalFilename  String
-  mimeType          String
-  sizeBytes         Int
-  checksum          String?
 
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
+  storageKey String               @unique
+  status     DocumentUploadStatus @default(PENDING)
 
-  cycle             KycSubmissionCycle   @relation(fields: [submissionCycleId], references: [id], onDelete: Cascade)
-  fieldDefinition   KycFieldDefinition   @relation(fields: [fieldDefinitionId], references: [id], onDelete: Restrict)
+  originalFilename String
+  mimeType         String
+  sizeBytes        Int
+  checksum         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cycle           KycSubmissionCycle @relation(fields: [submissionCycleId], references: [id], onDelete: Cascade)
+  fieldDefinition KycFieldDefinition @relation(fields: [fieldDefinitionId], references: [id], onDelete: Restrict)
 
   @@index([submissionCycleId])
   @@index([status, createdAt])
@@ -506,6 +522,8 @@ model LedgerEntry {
   debitAccount  LedgerAccount @relation("DebitAccount", fields: [debitAccountId], references: [id], onDelete: Restrict)
   creditAccount LedgerAccount @relation("CreditAccount", fields: [creditAccountId], references: [id], onDelete: Restrict)
   payout        Payout?       @relation(fields: [payoutId], references: [id], onDelete: Restrict)
+  withdrawal    Withdrawal?   @relation(fields: [withdrawalId], references: [id])
+  withdrawalId  String?
 
   @@unique([payoutId, purpose])
   @@index([debitAccountId])
@@ -519,7 +537,8 @@ model LedgerEntry {
 // -----------------------------------------------------------------------------
 
 model Payout {
-  id                String  @id @default(cuid())
+  environment       Environment @default(LIVE)
+  id                String      @id @default(cuid())
   merchantProfileId String
   idempotencyKey    String
   batchId           String?
@@ -533,16 +552,18 @@ model Payout {
   paymentMode PaymentMode     @default(IMPS)
   provider    PayoutProvider?
 
-  accountNumber     String  @db.VarChar(30)
-  ifscCode          String  @db.VarChar(11)
-  accountHolderName String
+  accountNumber     String? @db.VarChar(30)
+  ifscCode          String? @db.VarChar(11)
+  accountHolderName String?
+  vpa               String? @db.VarChar(100)
   beneficiaryPhone  String?
 
-  merchantReference String? @db.VarChar(100)
-  providerReference String?
-  bankReference     String? @unique
-  notes             String?
-  failureReason     String?
+  merchantReference      String? @db.VarChar(100)
+  providerReference      String?
+  bankReference          String? @unique
+  notes                  String?
+  failureReason          String?
+  providerFailureDetails Json?
 
   processedAt DateTime?
   createdAt   DateTime  @default(now())
@@ -552,7 +573,7 @@ model Payout {
   merchantProfile MerchantProfile @relation(fields: [merchantProfileId], references: [id], onDelete: Restrict)
   ledgerEntries   LedgerEntry[]
 
-  @@unique([merchantProfileId, idempotencyKey])
+  @@unique([merchantProfileId, idempotencyKey, environment])
   @@index([merchantProfileId, createdAt(sort: Desc)])
   @@index([status])
   @@index([deletedAt])
@@ -667,17 +688,21 @@ model SupportMessage {
 }
 
 model SystemSetting {
-  id              String   @id @default("GLOBAL_SETTINGS")
-  upiPayoutFee    Decimal  @default(0.0000) @db.Decimal(18, 4)
-  impsPayoutFee   Decimal  @default(0.0000) @db.Decimal(18, 4)
-  neftPayoutFee   Decimal  @default(0.0000) @db.Decimal(18, 4)
-  rtgsPayoutFee   Decimal  @default(0.0000) @db.Decimal(18, 4)
-  taxPercentage   Decimal  @default(0.00) @db.Decimal(5, 2)
-  minPayoutAmount Decimal  @default(100.0000) @db.Decimal(18, 4)
-  maxPayoutAmount Decimal  @default(500000.0000) @db.Decimal(18, 4)
-  reconciliationThresholdMins Int @default(15)
-  updatedAt       DateTime @updatedAt
-  updatedById     String?
+  id              String  @id @default("GLOBAL_SETTINGS")
+  upiPayoutFee    Decimal @default(0.0000) @db.Decimal(18, 4)
+  impsPayoutFee   Decimal @default(0.0000) @db.Decimal(18, 4)
+  neftPayoutFee   Decimal @default(0.0000) @db.Decimal(18, 4)
+  rtgsPayoutFee   Decimal @default(0.0000) @db.Decimal(18, 4)
+  taxPercentage   Decimal @default(0.00) @db.Decimal(5, 2)
+  minPayoutAmount Decimal @default(1.0000) @db.Decimal(18, 4)
+  maxPayoutAmount Decimal @default(10000000.0000) @db.Decimal(18, 4)
+
+  minAddFundsAmount Decimal @default(100.0000) @db.Decimal(18, 4)
+  minWithdrawAmount Decimal @default(500.0000) @db.Decimal(18, 4)
+
+  reconciliationThresholdMins Int      @default(15)
+  updatedAt                   DateTime @updatedAt
+  updatedById                 String?
 
   updatedBy User? @relation("AdminSettingsUpdates", fields: [updatedById], references: [id], onDelete: SetNull)
 
@@ -715,7 +740,7 @@ model SystemLease {
 
 model OutboxEvent {
   id            String            @id @default(cuid())
-  referenceType String            // e.g. "PAYOUT"
+  referenceType String // e.g. "PAYOUT"
   referenceId   String            @unique
   payload       Json?
   status        OutboxEventStatus @default(PENDING)
@@ -737,3 +762,306 @@ enum OutboxEventStatus {
   COMPLETED
   EXHAUSTED
 }
+
+// -----------------------------------------------------------------------------
+// MERCHANT SECURITY CONFIGURATION
+// -----------------------------------------------------------------------------
+
+model MerchantSecuritySettings {
+  id                String @id @default(cuid())
+  merchantProfileId String @unique
+
+  ipWhitelistEnabled Boolean  @default(false)
+  allowedIps         String[]
+
+  maxApiPayoutEnabled Boolean @default(false)
+  maxApiPayoutAmount  Decimal @default(0) @db.Decimal(18, 4)
+
+  suspiciousAlertsEnabled      Boolean @default(false)
+  suspiciousThreshold          Int     @default(10)
+  suspiciousWindowSeconds      Int     @default(60)
+  suspiciousIpEnabled          Boolean @default(true)
+  suspiciousUpiEnabled         Boolean @default(true)
+  suspiciousBankAccountEnabled Boolean @default(true)
+  suspiciousEmailEnabled       Boolean @default(true)
+  suspiciousAlertCooldown      Int     @default(300)
+
+  loginNotificationsEnabled Boolean @default(false)
+
+  updatedAt DateTime @updatedAt
+
+  merchantProfile MerchantProfile @relation(fields: [merchantProfileId], references: [id], onDelete: Cascade)
+
+  @@map("merchant_security_settings")
+}
+
+model SecurityEvent {
+  id                String            @id @default(cuid())
+  merchantProfileId String
+  eventType         SecurityEventType
+  severity          SecuritySeverity
+  description       String
+  ipAddress         String?
+  fingerprint       String?
+  metadata          Json?
+
+  createdAt DateTime @default(now())
+
+  merchantProfile MerchantProfile @relation(fields: [merchantProfileId], references: [id], onDelete: Cascade)
+
+  @@index([merchantProfileId, eventType])
+  @@index([merchantProfileId, createdAt])
+  @@index([ipAddress])
+  @@map("security_events")
+}
+
+enum SecurityEventType {
+  IP_BLOCKED
+  API_AMOUNT_LIMIT_EXCEEDED
+  SUSPICIOUS_IP_ACTIVITY
+  SUSPICIOUS_UPI_ACTIVITY
+  SUSPICIOUS_BANK_ACCOUNT_ACTIVITY
+  NEW_LOGIN
+  SECURITY_SETTING_CHANGED
+}
+
+enum SecuritySeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model SuspiciousActivityLog {
+  id                String       @id @default(cuid())
+  merchantProfileId String
+  activityType      ActivityType
+  fingerprint       String
+  createdAt         DateTime     @default(now())
+
+  @@index([merchantProfileId, activityType, fingerprint, createdAt])
+  @@map("suspicious_activity_logs")
+}
+
+enum ActivityType {
+  IP
+  UPI
+  BANK_ACCOUNT
+}
+
+// -----------------------------------------------------------------------------
+// NOTIFICATIONS
+// -----------------------------------------------------------------------------
+
+model Notification {
+  id                String   @id @default(cuid())
+  merchantProfileId String
+  type              String   @db.VarChar(50)
+  title             String   @db.VarChar(100)
+  message           String   @db.Text
+  read              Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  merchantProfile MerchantProfile @relation(fields: [merchantProfileId], references: [id], onDelete: Cascade)
+
+  @@index([merchantProfileId, createdAt(sort: Desc)])
+  @@index([merchantProfileId, read])
+  @@map("notifications")
+}
+
+// -----------------------------------------------------------------------------
+// WALLET VERTICAL
+// -----------------------------------------------------------------------------
+
+model MerchantBank {
+  id                String @id @default(cuid())
+  merchantProfileId String
+
+  accountNumber     String @db.VarChar(30)
+  ifscCode          String @db.VarChar(11)
+  accountHolderName String
+
+  isVerified Boolean @default(false)
+  isActive   Boolean @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  merchantProfile MerchantProfile @relation(fields: [merchantProfileId], references: [id], onDelete: Restrict)
+  withdrawals     Withdrawal[]
+
+  @@index([merchantProfileId])
+  @@index([deletedAt])
+  @@map("merchant_banks")
+}
+
+model Withdrawal {
+  id                String @id @default(cuid())
+  merchantProfileId String
+  merchantBankId    String
+  idempotencyKey    String
+
+  amount           Decimal @db.Decimal(18, 4)
+  fee              Decimal @default(0.0000) @db.Decimal(18, 4)
+  tax              Decimal @default(0.0000) @db.Decimal(18, 4)
+  totalDebitAmount Decimal @db.Decimal(18, 4)
+
+  status      WithdrawalStatus @default(PENDING)
+  paymentMode PaymentMode      @default(IMPS)
+  provider    PayoutProvider?
+
+  providerReference String?
+  bankReference     String? @unique
+  notes             String?
+  failureReason     String?
+
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  merchantProfile MerchantProfile @relation(fields: [merchantProfileId], references: [id], onDelete: Restrict)
+  merchantBank    MerchantBank    @relation(fields: [merchantBankId], references: [id], onDelete: Restrict)
+  ledgerEntries   LedgerEntry[]
+
+  @@unique([merchantProfileId, idempotencyKey])
+  @@index([merchantProfileId, createdAt(sort: Desc)])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("withdrawals")
+}
+
+enum WithdrawalStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
+  REVERSED
+}
+
+model PayoutFeeRule {
+  id          String      @id @default(cuid())
+  paymentMode PaymentMode
+  minAmount   Decimal     @db.Decimal(18, 4)
+  maxAmount   Decimal     @db.Decimal(18, 4)
+  fee         Decimal     @db.Decimal(18, 4)
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([paymentMode, isActive])
+  @@map("payout_fee_rules")
+}
+
+// -----------------------------------------------------------------------------
+// BAN USER VERTICAL
+// -----------------------------------------------------------------------------
+
+enum BanDestinationType {
+  UPI
+  BANK_ACCOUNT
+}
+
+enum BanStatus {
+  ACTIVE
+  UNBANNED
+}
+
+enum BanRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum GlobalBanStatus {
+  ACTIVE
+  REMOVED
+}
+
+model MerchantBan {
+  id                   String             @id @default(cuid())
+  merchantProfileId    String
+  createdById          String
+  unbannedById         String?
+  destinationType      BanDestinationType
+  identifierHash       String             @db.VarChar(64)
+  encryptedDestination String             @db.Text
+  maskedDestination    String             @db.VarChar(100)
+  reason               String             @db.VarChar(255)
+  status               BanStatus          @default(ACTIVE)
+  hashKeyVersion       Int                @default(1)
+  encryptionKeyVersion  Int                @default(1)
+  unbannedAt           DateTime?
+  unbanReason          String?            @db.VarChar(255)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  merchantProfile MerchantProfile @relation(fields: [merchantProfileId], references: [id], onDelete: Restrict)
+  createdBy       User            @relation("MerchantBanCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  unbannedBy      User?           @relation("MerchantBanUnbannedBy", fields: [unbannedById], references: [id], onDelete: SetNull)
+
+  @@index([merchantProfileId, status])
+  @@index([destinationType, identifierHash])
+  @@index([identifierHash, status])
+  @@map("merchant_bans")
+}
+
+model GlobalBanRequest {
+  id                   String             @id @default(cuid())
+  merchantProfileId    String
+  createdById          String
+  reviewedById         String?
+  destinationType      BanDestinationType
+  identifierHash       String             @db.VarChar(64)
+  encryptedDestination String             @db.Text
+  maskedDestination    String             @db.VarChar(100)
+  reason               String             @db.VarChar(255)
+  status               BanRequestStatus   @default(PENDING)
+  hashKeyVersion       Int                @default(1)
+  encryptionKeyVersion  Int                @default(1)
+  reviewedAt           DateTime?
+  reviewNotes          String?            @db.VarChar(255)
+  rejectionReason      String?            @db.VarChar(255)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  merchantProfile MerchantProfile @relation(fields: [merchantProfileId], references: [id], onDelete: Restrict)
+  createdBy       User            @relation("GlobalBanRequestCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  reviewedBy      User?           @relation("GlobalBanRequestReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  globalBan       GlobalBan?
+
+  @@index([status, createdAt])
+  @@index([merchantProfileId, status])
+  @@index([destinationType, identifierHash])
+  @@map("global_ban_requests")
+}
+
+model GlobalBan {
+  id                   String             @id @default(cuid())
+  approvedById         String
+  removedById          String?
+  sourceRequestId      String?            @unique
+  destinationType      BanDestinationType
+  identifierHash       String             @db.VarChar(64)
+  encryptedDestination String             @db.Text
+  maskedDestination    String             @db.VarChar(100)
+  reason               String             @db.VarChar(255)
+  status               GlobalBanStatus    @default(ACTIVE)
+  hashKeyVersion       Int                @default(1)
+  encryptionKeyVersion  Int                @default(1)
+  removedAt            DateTime?
+  removalReason        String?            @db.VarChar(255)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  approvedBy    User              @relation("GlobalBanApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
+  removedBy     User?             @relation("GlobalBanRemovedBy", fields: [removedById], references: [id], onDelete: SetNull)
+  sourceRequest GlobalBanRequest? @relation(fields: [sourceRequestId], references: [id], onDelete: SetNull)
+
+  @@index([destinationType, identifierHash])
+  @@index([status])
+  @@map("global_bans")
+}
+

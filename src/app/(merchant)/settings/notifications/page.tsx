@@ -1,4 +1,5 @@
 ﻿"use client";
+import { redirect } from "next/navigation";
 
 import React, { useState, useEffect } from "react";
 import { toast } from "sonner";
@@ -28,12 +29,12 @@ function Switch({
       onClick={() => onChange(!checked)}
       className={cn(
         "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50",
-        checked ? "bg-indigo-600" : "bg-slate-200 dark:bg-slate-700"
+        checked ? "bg-indigo-600" : "bg-surface dark:bg-surface"
       )}
     >
       <span
         className={cn(
-          "pointer-events-none block h-5 w-5 rounded-full bg-white shadow-sm ring-0 transition-transform",
+          "pointer-events-none block h-5 w-5 rounded-full bg-surface shadow-sm ring-0 transition-transform",
           checked ? "translate-x-5" : "translate-x-0"
         )}
       />
@@ -42,6 +43,8 @@ function Switch({
 }
 
 export default function NotificationsSettingsPage() {
+  redirect("/settings/profile");
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [preferences, setPreferences] = useState({
@@ -105,11 +108,11 @@ export default function NotificationsSettingsPage() {
     return (
       <div className="p-4 sm:p-8 max-w-4xl mx-auto space-y-6">
         <div>
-          <div className="h-8 w-32 bg-slate-200 dark:bg-slate-800 rounded animate-pulse mb-2"></div>
-          <div className="h-4 w-48 bg-slate-200 dark:bg-slate-800 rounded animate-pulse"></div>
+          <div className="h-8 w-32 bg-surface dark:bg-surface rounded animate-pulse mb-2"></div>
+          <div className="h-4 w-48 bg-surface dark:bg-surface rounded animate-pulse"></div>
         </div>
         <Card className="p-6">
-          <div className="flex-1 flex flex-col items-center justify-center py-12 text-slate-400">
+          <div className="flex-1 flex flex-col items-center justify-center py-12 text-text-muted">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mb-4"></div>
             <p className="text-sm font-medium">Loading settings...</p>
           </div>
@@ -122,11 +125,11 @@ export default function NotificationsSettingsPage() {
     return (
       <div className="p-4 sm:p-8 max-w-4xl mx-auto space-y-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Settings</h1>
-          <p className="text-slate-500 dark:text-slate-400">Manage your notification preferences.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-text-primary dark:text-text-muted">Settings</h1>
+          <p className="text-text-muted dark:text-text-muted">Manage your notification preferences.</p>
         </div>
-        <Card className="p-12 flex flex-col items-center justify-center text-center border-red-100 bg-red-50/50 dark:bg-red-950/20 dark:border-red-900/50">
-          <p className="text-red-600 dark:text-red-400 mb-4 font-medium">Unable to load notification settings.</p>
+        <Card className="p-12 flex flex-col items-center justify-center text-center border-coral-500/20 bg-coral-100/50 dark:bg-red-950/20 dark:border-red-900/50">
+          <p className="text-coral-600 dark:text-red-400 mb-4 font-medium">Unable to load notification settings.</p>
           <Button onClick={fetchPreferences} variant="outline" className="border-red-200 text-red-700 hover:bg-red-100 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900">
             Retry
           </Button>
@@ -138,8 +141,8 @@ export default function NotificationsSettingsPage() {
   return (
     <div className="p-4 sm:p-8 max-w-4xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Settings</h1>
-        <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 mt-1">
+        <h1 className="text-2xl font-bold tracking-tight text-text-primary dark:text-text-muted">Settings</h1>
+        <div className="flex items-center gap-2 text-text-muted dark:text-text-muted mt-1">
           <Bell className="w-4 h-4" />
           <p>Notifications</p>
         </div>
@@ -156,8 +159,8 @@ export default function NotificationsSettingsPage() {
       <Card className="divide-y divide-border">
         <div className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1 pr-8">
-            <h3 className="font-medium text-slate-900 dark:text-slate-100">Login Notifications</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
+            <h3 className="font-medium text-text-primary dark:text-text-muted">Login Notifications</h3>
+            <p className="text-sm text-text-muted dark:text-text-muted">
               Receive an email when your account is successfully signed in.
             </p>
           </div>
@@ -171,8 +174,8 @@ export default function NotificationsSettingsPage() {
 
         <div className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1 pr-8">
-            <h3 className="font-medium text-slate-900 dark:text-slate-100">KYC Notifications</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
+            <h3 className="font-medium text-text-primary dark:text-text-muted">KYC Notifications</h3>
+            <p className="text-sm text-text-muted dark:text-text-muted">
               Receive email updates when your KYC application is submitted, resubmitted, rejected, or approved.
             </p>
           </div>

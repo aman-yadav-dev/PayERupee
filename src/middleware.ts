@@ -36,12 +36,33 @@ export function middleware(request: NextRequest) {
   }
 
   // 2. Consume transient verification cookie for idempotency
-  let response = NextResponse.next();
+  const response = NextResponse.next();
   if (pathname.startsWith('/verify-result') && request.cookies.has('payERupee_verification_fresh')) {
     response.cookies.delete('payERupee_verification_fresh');
   }
 
-  // 3. Continue the request and apply headers
+  // 3. Admin Route Protection
+  const hasSession = request.cookies.has('better-auth.session_token') || request.cookies.has('__Secure-better-auth.session_token');
+  
+  if (pathname.startsWith('/admin')) {
+    if (pathname !== '/admin/login' && !hasSession) {
+      const loginUrl = new URL('/admin/login', request.url);
+      loginUrl.searchParams.set('callbackUrl', pathname);
+      return applySecurityHeaders(NextResponse.redirect(loginUrl));
+    }
+  }
+
+  // 4. Admin API Protection (Reject early if no session cookie or bearer token)
+  if (pathname.startsWith('/api/v1/admin')) {
+    const hasAuth = hasSession || Boolean(request.headers.get('authorization'));
+    if (!hasAuth) {
+      return applySecurityHeaders(
+        NextResponse.json({ success: false, error: 'Unauthorized: Admin session required' }, { status: 401 })
+      );
+    }
+  }
+
+  // 5. Continue the request and apply headers
   return applySecurityHeaders(response);
 }
 

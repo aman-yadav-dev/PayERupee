@@ -1,3 +1,4 @@
+import { PayMyQrPayoutProvider } from "@/modules/provider/adapters/paymyqr.provider";
 import { describe, it, expect, beforeAll, afterEach, beforeEach } from "vitest";
 import { db } from "@/infrastructure/database/db";
 import { InMemoryPayoutProvider } from "@/modules/provider/adapters/mock.provider";
@@ -24,12 +25,26 @@ function validPayoutData() {
 }
 
 describe("Phase 4: Orchestrator & Webhooks", () => {
+  beforeAll(() => { 
+    PayMyQrPayoutProvider.prototype.verifyWebhookSignature = (b, h) => h["x-provider-signature"] === "test-secret"; 
+    PayMyQrPayoutProvider.prototype.parseWebhook = (body) => {
+      const parsed = JSON.parse(body);
+      return {
+        payoutId: parsed.payoutId,
+        status: parsed.status,
+        providerReference: parsed.reference,
+        reason: parsed.status
+      };
+    };
+  });
   let merchantId: string;
   let walletId: string;
   let rawApiKey: string;
   let otherMerchantId: string;
 
   beforeAll(async () => {
+    
+
     // Setup users, profiles, ledgers, wallets, API keys
     const user = await db.user.create({ data: { name: "O1", email: `o1-${Date.now()}@test.com` } });
     const profile = await db.merchantProfile.create({ data: { userId: user.id, accountStatus: "ACTIVE", kycApplication: { create: { cycles: { create: { cycleNumber: 1, formVersion: { create: { status: "PUBLISHED", versionNumber: 1, form: { create: { name: "Test Form" } } } }, status: "APPROVED", isCurrentCycle: true } }
@@ -42,7 +57,7 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
     if (!revenue) await db.ledgerAccount.create({ data: { type: "SYSTEM_REVENUE", isActive: true } });
 
     const la = await db.ledgerAccount.create({ data: { merchantProfileId: merchantId, type: "MERCHANT_LIABILITY", isActive: true } });
-    const wallet = await db.wallet.create({ data: { merchantProfileId: merchantId, ledgerAccountId: la.id, balance: "10000.00", version: 1, isActive: true } });
+    const wallet = await db.wallet.create({ data: { merchantProfileId: merchantId, ledgerAccountId: la.id, balance: "1000000.00", version: 1, isActive: true } });
     walletId = wallet.id;
 
     rawApiKey = `sk_test_${Date.now()}`;
@@ -84,17 +99,17 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
 
   it("2. Valid API key authenticates and returns merchantProfileId", async () => {
     const extractedId = await authenticateApiKey(`Bearer ${rawApiKey}`);
-    expect(extractedId).toBe(merchantId);
+    expect(extractedId.merchantProfileId).toBe(merchantId);
   });
 
   it("3. PENDING -> PROCESSING deducts exactly once and is left in PROCESSING on QUEUED", async () => {
     InMemoryPayoutProvider.nextAction = "QUEUED";
     const initialWallet = await db.wallet.findUniqueOrThrow({ where: { id: walletId } });
 
-    const { payout } = await createPayout(merchantId, validPayoutData());
+    const { payout } = await createPayout(merchantId, "LIVE", crypto.randomUUID(), validPayoutData());
     expect(payout.status).toBe(PayoutStatus.PENDING);
 
-    const finalPayout = await dispatchPayout(payout.id, merchantId, provider);
+    const finalPayout = await dispatchPayout(payout.id, merchantId, "LIVE", provider);
     expect(finalPayout.status).toBe(PayoutStatus.PROCESSING);
     expect(finalPayout.providerReference).toBe(`MOCK_REF_${payout.id}`);
 
@@ -106,8 +121,8 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
     InMemoryPayoutProvider.nextAction = "FAILED";
     const initialWallet = await db.wallet.findUniqueOrThrow({ where: { id: walletId } });
 
-    const { payout } = await createPayout(merchantId, validPayoutData());
-    const finalPayout = await dispatchPayout(payout.id, merchantId, provider);
+    const { payout } = await createPayout(merchantId, "LIVE", crypto.randomUUID(), validPayoutData());
+    const finalPayout = await dispatchPayout(payout.id, merchantId, "LIVE", provider);
     
     expect(finalPayout.status).toBe(PayoutStatus.FAILED);
     expect(finalPayout.failureReason).toBe("MOCK_INSUFFICIENT_PROVIDER_BALANCE");
@@ -120,8 +135,8 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
     InMemoryPayoutProvider.nextAction = "TIMEOUT";
     const initialWallet = await db.wallet.findUniqueOrThrow({ where: { id: walletId } });
 
-    const { payout } = await createPayout(merchantId, validPayoutData());
-    const finalPayout = await dispatchPayout(payout.id, merchantId, provider);
+    const { payout } = await createPayout(merchantId, "LIVE", crypto.randomUUID(), validPayoutData());
+    const finalPayout = await dispatchPayout(payout.id, merchantId, "LIVE", provider);
     
     expect(finalPayout.status).toBe(PayoutStatus.PROCESSING);
     expect(finalPayout.providerReference).toBe(`MOCK_PENDING_${payout.id}`);
@@ -137,8 +152,8 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
     InMemoryPayoutProvider.nextAction = "NETWORK_ERROR";
     const initialWallet = await db.wallet.findUniqueOrThrow({ where: { id: walletId } });
 
-    const { payout } = await createPayout(merchantId, validPayoutData());
-    const finalPayout = await dispatchPayout(payout.id, merchantId, provider);
+    const { payout } = await createPayout(merchantId, "LIVE", crypto.randomUUID(), validPayoutData());
+    const finalPayout = await dispatchPayout(payout.id, merchantId, "LIVE", provider);
     
     expect(finalPayout.status).toBe(PayoutStatus.PROCESSING);
     
@@ -165,10 +180,10 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
 
   it("7b. Direct provider SUCCESS is properly handled immediately", async () => {
     InMemoryPayoutProvider.nextAction = "SUCCESS";
-    const { payout } = await createPayout(merchantId, validPayoutData());
+    const { payout } = await createPayout(merchantId, "LIVE", crypto.randomUUID(), validPayoutData());
     const initialWallet = await db.wallet.findUniqueOrThrow({ where: { id: walletId } });
 
-    const finalPayout = await dispatchPayout(payout.id, merchantId, provider);
+    const finalPayout = await dispatchPayout(payout.id, merchantId, "LIVE", provider);
 
     // Should become SUCCESS immediately
     expect(finalPayout.status).toBe(PayoutStatus.SUCCESS);
@@ -188,8 +203,8 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
 
   it("8. Webhook SUCCESS idempotency and state safety", async () => {
     InMemoryPayoutProvider.nextAction = "TIMEOUT";
-    const { payout } = await createPayout(merchantId, validPayoutData());
-    const processing = await dispatchPayout(payout.id, merchantId, provider);
+    const { payout } = await createPayout(merchantId, "LIVE", crypto.randomUUID(), validPayoutData());
+    const processing = await dispatchPayout(payout.id, merchantId, "LIVE", provider);
     const initialWallet = await db.wallet.findUniqueOrThrow({ where: { id: walletId } });
 
     // Send valid SUCCESS webhook
@@ -211,8 +226,8 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
   it("9. Webhook FAILED correctly refunds and rejects duplicates", async () => {
     InMemoryPayoutProvider.nextAction = "TIMEOUT";
     const initialWallet = await db.wallet.findUniqueOrThrow({ where: { id: walletId } });
-    const { payout } = await createPayout(merchantId, validPayoutData());
-    const processing = await dispatchPayout(payout.id, merchantId, provider);
+    const { payout } = await createPayout(merchantId, "LIVE", crypto.randomUUID(), validPayoutData());
+    const processing = await dispatchPayout(payout.id, merchantId, "LIVE", provider);
 
     // Send FAILED webhook
     const res1 = await sendWebhook(payout.id, processing.providerReference!, "FAILED");
@@ -232,8 +247,8 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
   it("10. Webhook REVERSED correctly refunds from SUCCESS and rejects duplicates", async () => {
     InMemoryPayoutProvider.nextAction = "QUEUED";
     const initialWallet = await db.wallet.findUniqueOrThrow({ where: { id: walletId } });
-    const { payout } = await createPayout(merchantId, validPayoutData());
-    const queuedPayout = await dispatchPayout(payout.id, merchantId, provider);
+    const { payout } = await createPayout(merchantId, "LIVE", crypto.randomUUID(), validPayoutData());
+    const queuedPayout = await dispatchPayout(payout.id, merchantId, "LIVE", provider);
 
     await sendWebhook(payout.id, queuedPayout.providerReference!, "SUCCESS");
 
@@ -257,8 +272,8 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
 
   it("11. Out-of-order webhook (FAILED after SUCCESS) safely ignores backward transitions", async () => {
     InMemoryPayoutProvider.nextAction = "QUEUED";
-    const { payout } = await createPayout(merchantId, validPayoutData());
-    const queuedPayout = await dispatchPayout(payout.id, merchantId, provider);
+    const { payout } = await createPayout(merchantId, "LIVE", crypto.randomUUID(), validPayoutData());
+    const queuedPayout = await dispatchPayout(payout.id, merchantId, "LIVE", provider);
     
     await sendWebhook(payout.id, queuedPayout.providerReference!, "SUCCESS");
 
@@ -278,7 +293,7 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
     
     const req1 = new NextRequest("http://localhost/api/v1/payouts", {
       method: "POST",
-      headers: { "Authorization": `Bearer ${rawApiKey}` },
+      headers: { "Authorization": `Bearer ${rawApiKey}`, "Idempotency-Key": "idem-static-12345" },
       body: JSON.stringify(data),
     });
     
@@ -295,7 +310,7 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
     
     const req1 = new NextRequest("http://localhost/api/v1/payouts", {
       method: "POST",
-      headers: { "Authorization": `Bearer ${rawApiKey}` },
+      headers: { "Authorization": `Bearer ${rawApiKey}`, "Idempotency-Key": "idem-static-12345" },
       body: JSON.stringify(data),
     });
     const res1 = await apiPost(req1);
@@ -307,7 +322,7 @@ describe("Phase 4: Orchestrator & Webhooks", () => {
 
     const req2 = new NextRequest("http://localhost/api/v1/payouts", {
       method: "POST",
-      headers: { "Authorization": `Bearer ${rawApiKey}` },
+      headers: { "Authorization": `Bearer ${rawApiKey}`, "Idempotency-Key": "idem-static-12345" },
       body: JSON.stringify(data), // Same idempotencyKey
     });
     const res2 = await apiPost(req2);

@@ -10,9 +10,16 @@ export class UnauthorizedError extends Error {
 }
 
 export class ForbiddenError extends Error {
-  constructor(message = "Forbidden") {
+  public code?: string;
+  public details?: string;
+  public action?: string;
+
+  constructor(message = "Forbidden", options?: { code?: string, details?: string, action?: string }) {
     super(message);
     this.name = "ForbiddenError";
+    this.code = options?.code;
+    this.details = options?.details;
+    this.action = options?.action;
   }
 }
 
@@ -61,7 +68,11 @@ export async function requireMerchantContext(req: NextRequest | Request) {
   });
 
   if (!merchantProfile) {
-    throw new ForbiddenError("No merchant profile associated with this user");
+    throw new ForbiddenError("No merchant profile associated with this user", {
+      code: "NO_MERCHANT_PROFILE",
+      details: "Your session is valid, but your account does not have a merchant profile configured.",
+      action: "Complete your merchant registration."
+    });
   }
 
   return {
@@ -78,7 +89,11 @@ export async function requireMerchantContext(req: NextRequest | Request) {
 export async function requireAccountApproved(req: NextRequest | Request) {
   const context = await requireMerchantContext(req);
   if (context.accountStatus !== "ACTIVE") {
-    throw new ForbiddenError("Merchant account is not active");
+    throw new ForbiddenError("Merchant account is not active", {
+      code: "ACCOUNT_NOT_ACTIVE",
+      details: `Your account status is not active.`,
+      action: "Please contact support to activate your account."
+    });
   }
   return context;
 }
@@ -89,7 +104,11 @@ export async function requireAccountApproved(req: NextRequest | Request) {
 export async function requireKycApproved(req: NextRequest | Request) {
   const context = await requireMerchantContext(req);
   if (context.kycStatus !== "APPROVED") {
-    throw new ForbiddenError("Merchant KYC is not approved");
+    throw new ForbiddenError("Merchant KYC is not approved", {
+      code: "KYC_NOT_APPROVED",
+      details: `You cannot access this resource until KYC is fully approved.`,
+      action: "Complete KYC verification in your dashboard."
+    });
   }
   return context;
 }
@@ -102,11 +121,19 @@ export async function requireFullMerchantAccess(req: NextRequest | Request): Pro
   const context = await requireMerchantContext(req);
 
   if (context.accountStatus !== "ACTIVE") {
-    throw new ForbiddenError("Merchant account is not active");
+    throw new ForbiddenError("Merchant account is not active", {
+      code: "ACCOUNT_NOT_ACTIVE",
+      details: `Your account status is not active.`,
+      action: "Please contact support to activate your account."
+    });
   }
 
   if (context.kycStatus !== "APPROVED") {
-    throw new ForbiddenError("Merchant KYC is not approved");
+    throw new ForbiddenError("Merchant KYC is not approved", {
+      code: "KYC_NOT_APPROVED",
+      details: `You cannot access this resource until KYC is fully approved.`,
+      action: "Complete KYC verification in your dashboard."
+    });
   }
 
   return {
@@ -116,7 +143,7 @@ export async function requireFullMerchantAccess(req: NextRequest | Request): Pro
 }
 
 /**
- * Ensures the authenticated user has the ADMIN role.
+ * Ensures the authenticated user has the ADMIN or SUPER_ADMIN role.
  */
 export async function requireAdmin(req: NextRequest | Request) {
   const session = await authenticateSession(req);
@@ -126,8 +153,34 @@ export async function requireAdmin(req: NextRequest | Request) {
     select: { role: true }
   });
 
-  if (!user || user.role !== "ADMIN") {
-    throw new ForbiddenError("Admin access required");
+  if (!user || (user.role !== "ADMIN" && user.role !== "SUPER_ADMIN")) {
+    throw new ForbiddenError("Admin access required", {
+      code: "ADMIN_ACCESS_REQUIRED",
+      details: "This endpoint requires administrative privileges.",
+      action: "Sign in with an administrator account."
+    });
+  }
+
+  return session;
+}
+
+/**
+ * Ensures the authenticated user has the SUPER_ADMIN role.
+ */
+export async function requireSuperAdmin(req: NextRequest | Request) {
+  const session = await authenticateSession(req);
+
+  const user = await db.user.findUnique({
+    where: { id: session.user.id },
+    select: { role: true }
+  });
+
+  if (!user || user.role !== "SUPER_ADMIN") {
+    throw new ForbiddenError("Super Admin access required", {
+      code: "SUPER_ADMIN_ACCESS_REQUIRED",
+      details: "This endpoint requires super administrative privileges.",
+      action: "Sign in with a super administrator account."
+    });
   }
 
   return session;

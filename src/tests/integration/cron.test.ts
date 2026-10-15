@@ -67,8 +67,7 @@ describe("Cron Bridge Routes", () => {
       
       expect(outboxProcessor.processOutbox).toHaveBeenCalledTimes(1);
       expect(outboxProcessor.processOutbox).toHaveBeenCalledWith(
-        expect.stringContaining("cron-outbox-"),
-        expect.anything()
+        expect.stringContaining("cron-outbox-")
       );
     });
 

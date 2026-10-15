@@ -1,10 +1,11 @@
-import { AccountStatus, KycStatus } from "@prisma/client";
+import { AccountStatus, KycStatus, UserRole } from "@prisma/client";
 
 export interface DestinationContext {
   session: {
     user: {
       id: string;
       emailVerified: boolean;
+      role?: UserRole;
     };
   } | null;
   profile: {
@@ -28,7 +29,8 @@ export type AuthDestination =
   | "/kyc/under-review"
   | "/kyc/rejected"
   | "/pending-approval"
-  | "/dashboard";
+  | "/dashboard"
+  | "/admin/dashboard";
 
 /**
  * Deterministically resolves the correct route destination based on the authoritative
@@ -40,6 +42,11 @@ export type AuthDestination =
 export function resolveAuthDestination(ctx: DestinationContext): AuthDestination {
   if (!ctx.session) {
     return "/login";
+  }
+
+  // Admin & Super Admin accounts bypass merchant onboarding and KYC entirely
+  if (ctx.session.user.role === "ADMIN" || ctx.session.user.role === "SUPER_ADMIN") {
+    return "/admin/dashboard";
   }
 
   if (!ctx.session.user.emailVerified) {

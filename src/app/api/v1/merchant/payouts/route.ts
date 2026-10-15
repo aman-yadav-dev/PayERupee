@@ -1,14 +1,14 @@
+import { logger } from "@/infrastructure/logger/logger";
 import { NextRequest, NextResponse } from "next/server";
 import { requireFullMerchantAccess, UnauthorizedError, ForbiddenError } from "@/modules/auth/application/session-auth.service";
 import { db } from "@/infrastructure/database/db";
 import { Prisma } from "@prisma/client";
+import { parseTransactionsFilters, InvalidFilterError } from "@/modules/payout/application/transactions-filters";
 
 export async function GET(req: NextRequest) {
   try {
-    // 1. Authenticate & derive tenant context securely
     const { merchantProfileId } = await requireFullMerchantAccess(req);
 
-    // 2. Parse basic pagination safely
     const url = new URL(req.url);
     const pageParam = parseInt(url.searchParams.get("page") || "1", 10);
     const limitParam = parseInt(url.searchParams.get("limit") || "20", 10);
@@ -17,17 +17,16 @@ export async function GET(req: NextRequest) {
     const limit = isNaN(limitParam) || limitParam < 1 ? 20 : Math.min(100, limitParam);
     const skip = (page - 1) * limit;
 
-    // Optional filters (e.g., status)
-    const statusParam = url.searchParams.get("status");
-    const whereClause: Prisma.PayoutWhereInput = {
-      merchantProfileId, // Strict isolation
-    };
-
-    if (statusParam) {
-      whereClause.status = statusParam as any;
+    let whereClause: Prisma.PayoutWhereInput;
+    try {
+      whereClause = parseTransactionsFilters(req, merchantProfileId);
+    } catch (err: any) {
+      if (err instanceof InvalidFilterError) {
+        return NextResponse.json({ success: false, error: err.message }, { status: 400 });
+      }
+      throw err;
     }
 
-    // 3. Fetch data and count
     const [payouts, total] = await Promise.all([
       db.payout.findMany({
         where: whereClause,
@@ -43,6 +42,7 @@ export async function GET(req: NextRequest) {
           totalDebitAmount: true,
           status: true,
           paymentMode: true,
+          accountHolderName: true,
           providerReference: true,
           createdAt: true,
           updatedAt: true,
@@ -65,10 +65,19 @@ export async function GET(req: NextRequest) {
     if (error instanceof UnauthorizedError) {
       return NextResponse.json({ success: false, error: error.message }, { status: 401 });
     }
-    if (error instanceof ForbiddenError) {
-      return NextResponse.json({ success: false, error: error.message }, { status: 403 });
+    if (error instanceof Error && error.name === "ForbiddenError") {
+      const fbErr = error as any;
+      return NextResponse.json({
+        success: false,
+        error: {
+          code: fbErr.code || "FORBIDDEN",
+          message: fbErr.message,
+          details: fbErr.details,
+          action: fbErr.action
+        }
+      }, { status: 403 });
     }
-    console.error("[GET /api/v1/merchant/payouts]", error);
+    logger.error("[GET /api/v1/merchant/payouts]", error);
     return NextResponse.json(
       { success: false, error: "Internal Server Error" },
       { status: 500 }

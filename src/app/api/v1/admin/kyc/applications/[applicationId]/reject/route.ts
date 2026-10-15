@@ -1,3 +1,4 @@
+import { logger } from "@/infrastructure/logger/logger";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/modules/auth/application/session-auth.service";
 import { rejectKycApplication } from "@/modules/admin/application/admin-kyc.service";
@@ -15,7 +16,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ app
     if (error instanceof ApplicationNotFoundError) return NextResponse.json({ error: error.message }, { status: 404 });
     if (error instanceof KycStateError) return NextResponse.json({ error: error.message }, { status: 409 });
     if (error instanceof KycValidationError) return NextResponse.json({ error: error.message }, { status: 400 });
-    console.error("[POST /api/v1/admin/kyc/applications/[id]/reject]", error);
+    logger.error("[POST /api/v1/admin/kyc/applications/[id]/reject]", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

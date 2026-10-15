@@ -1,4 +1,5 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { logger } from "@/infrastructure/logger/logger";
+import { NextRequest, NextResponse } from "next/server";
 import { requireMerchantContext, UnauthorizedError, ForbiddenError } from "@/modules/auth/application/session-auth.service";
 import { getNotificationPreferences, updateNotificationPreferences } from "@/modules/notifications/application/preference.service";
 import { updateNotificationPreferenceSchema } from "@/modules/notifications/schemas/preference.schema";
@@ -18,10 +19,19 @@ export async function GET(req: NextRequest) {
     if (error instanceof UnauthorizedError) {
       return NextResponse.json({ success: false, error: error.message }, { status: 401 });
     }
-    if (error instanceof ForbiddenError) {
-      return NextResponse.json({ success: false, error: error.message }, { status: 403 });
+    if (error instanceof Error && error.name === "ForbiddenError") {
+      const fbErr = error as any;
+      return NextResponse.json({
+        success: false,
+        error: {
+          code: fbErr.code || "FORBIDDEN",
+          message: fbErr.message,
+          details: fbErr.details,
+          action: fbErr.action
+        }
+      }, { status: 403 });
     }
-    console.error("[GET /api/v1/merchant/settings/notifications]", error);
+    logger.error("[GET /api/v1/merchant/settings/notifications]", error);
     return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }
@@ -56,10 +66,19 @@ export async function PATCH(req: NextRequest) {
     if (error instanceof UnauthorizedError) {
       return NextResponse.json({ success: false, error: error.message }, { status: 401 });
     }
-    if (error instanceof ForbiddenError) {
-      return NextResponse.json({ success: false, error: error.message }, { status: 403 });
+    if (error instanceof Error && error.name === "ForbiddenError") {
+      const fbErr = error as any;
+      return NextResponse.json({
+        success: false,
+        error: {
+          code: fbErr.code || "FORBIDDEN",
+          message: fbErr.message,
+          details: fbErr.details,
+          action: fbErr.action
+        }
+      }, { status: 403 });
     }
-    console.error("[PATCH /api/v1/merchant/settings/notifications]", error);
+    logger.error("[PATCH /api/v1/merchant/settings/notifications]", error);
     return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }

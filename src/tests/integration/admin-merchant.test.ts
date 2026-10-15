@@ -165,7 +165,7 @@ describe("Admin Merchant Account Approval API", () => {
     expect(res.status).toBe(403);
     
     const body = await res.json();
-    expect(body.error).toContain("Merchant KYC is not approved");
+    expect(body.error.message).toContain("Merchant KYC is not approved");
   });
 });
 

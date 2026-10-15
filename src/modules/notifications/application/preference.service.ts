@@ -6,16 +6,18 @@ export interface NotificationPreferences {
 }
 
 export async function getNotificationPreferences(userId: string): Promise<NotificationPreferences> {
-  const pref = await db.notificationPreference.findUnique({
-    where: { userId }
-  });
-
-  if (!pref) {
-    return {
+  // Use upsert to atomically ensure a row exists.
+  // If it already exists, update nothing.
+  // If it doesn't exist, create it with the default values.
+  const pref = await db.notificationPreference.upsert({
+    where: { userId },
+    update: {},
+    create: {
+      userId,
       loginEmailsEnabled: true,
       kycEmailsEnabled: true
-    };
-  }
+    }
+  });
 
   return {
     loginEmailsEnabled: pref.loginEmailsEnabled,

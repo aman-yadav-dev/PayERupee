@@ -7,7 +7,7 @@ import { env } from "@/config/env";
 export class PayoutWebhookController {
   static async handleWebhook(req: NextRequest): Promise<NextResponse> {
     try {
-      const provider = getPayoutProvider();
+      const provider = getPayoutProvider("LIVE");
       
       const headersObj: Record<string, string> = {};
       req.headers.forEach((value, key) => {

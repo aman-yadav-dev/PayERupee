@@ -176,7 +176,7 @@ describe("Merchant API Key Management", () => {
       const body = await res.json();
 
       // Ensure that api-auth.service.ts can authenticate this raw secret
-      const authenticatedMerchantId = await authenticateApiKey(`Bearer ${body.rawSecret}`);
+      const { merchantProfileId: authenticatedMerchantId } = await authenticateApiKey(`Bearer ${body.rawSecret}`);
       expect(authenticatedMerchantId).toBe(mockMerchantId1);
     });
   });

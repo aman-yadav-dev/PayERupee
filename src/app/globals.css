@@ -49,6 +49,16 @@
 }
 
 :root {
+  --canvas: #f5f8fc;
+  --surface: #ffffff;
+  --surface-hover: #f7f9fd;
+  --line: #e3e9f3;
+  --line-soft: #edf1f8;
+
+  --text-primary: #0b1220;
+  --text-secondary: #55617a;
+  --text-muted: #8792a8;
+
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -84,6 +94,16 @@
 }
 
 .dark {
+  --canvas: #070b14;
+  --surface: #0e1420;
+  --surface-hover: #131a29;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-soft: rgba(255, 255, 255, 0.05);
+
+  --text-primary: #f1f5fc;
+  --text-secondary: #92a0be;
+  --text-muted: #66738f;
+
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -144,3 +164,25 @@
 .animate-field-shake {
   animation: payerupee-shake 0.4s ease-in-out;
 }
+
+/* ─── Custom Scrollbar for Drawers and Modals ──────────────────────────────── */
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 20px;
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+.custom-scrollbar:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+}
+.dark .custom-scrollbar:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.2);
+}

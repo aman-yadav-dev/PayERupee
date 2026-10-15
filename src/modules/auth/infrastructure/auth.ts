@@ -1,3 +1,4 @@
+import { logger } from "@/infrastructure/logger/logger";
 import { cookies } from "next/headers";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
@@ -88,7 +89,7 @@ export const auth = betterAuth({
         });
 
         if (!userRecord?.merchantProfile) {
-          console.warn(`[afterEmailVerification] No merchant profile found for verified user ${user.id}`);
+          logger.info(`[afterEmailVerification] No merchant profile found for verified user ${user.id}`);
           return;
         }
 
@@ -121,7 +122,7 @@ export const auth = betterAuth({
           triggerImmediateEmailDispatch();
         }
       } catch (error) {
-        console.error(`[afterEmailVerification] Error creating outbox events for user ${user.id}:`, error);
+        logger.error(`[afterEmailVerification] Error creating outbox events for user ${user.id}:`, error);
         // Do not throw; the user has successfully verified, do not disrupt the UX.
       }
     },
@@ -142,47 +143,28 @@ export const auth = betterAuth({
   plugins: [nextCookies()],
 
   databaseHooks: {
+    user: {
+      create: {
+        async after(user) {
+          try {
+            await db.notificationPreference.create({
+              data: {
+                userId: user.id,
+                loginEmailsEnabled: true,
+                kycEmailsEnabled: true
+              }
+            });
+          } catch (e) {
+            logger.error(`[auth] Failed to create notification preferences for new user ${user.id}`, e);
+          }
+        }
+      }
+    },
     session: {
       create: {
         async after(session) {
-          try {
-            const user = await db.user.findUnique({ 
-              where: { id: session.userId }, 
-              select: { name: true, email: true, createdAt: true, emailVerified: true }
-            });
-
-            // Suppress login notification for unverified emails
-            if (!user?.emailVerified) return;
-
-            // Suppress login notification for the initial registration session
-            const isInitialRegistration = Math.abs(session.createdAt.getTime() - user.createdAt.getTime()) < 60000;
-            if (isInitialRegistration) return;
-
-            const { getNotificationPreferences } = await import("@/modules/notifications/application/preference.service");
-            const prefs = await getNotificationPreferences(session.userId);
-            if (prefs.loginEmailsEnabled && user?.email && user?.name) {
-              await db.outboxEvent.create({
-                  data: {
-                    referenceId: "LOGIN_" + session.id,
-                    referenceType: "EMAIL_DISPATCH",
-                    payload: {
-                      templateId: "LOGIN_NOTIFICATION",
-                      to: user.email,
-                      subject: "New Login to PayERupee",
-                      templateVariables: {
-                        name: user.name,
-                        time: new Date().toUTCString()
-                      }
-                    }
-                  }
-                });
-                
-                const { triggerImmediateEmailDispatch } = await import("@/modules/notifications/application/email-outbox.dispatcher");
-                triggerImmediateEmailDispatch();
-              }
-          } catch (e) {
-            console.error("Failed to enqueue login email:", e);
-          }
+          const { dispatchLoginNotification } = await import("@/modules/auth/application/login-notification.service");
+          await dispatchLoginNotification(session);
         },
         async before(session) {
           const profile = await db.merchantProfile.findUnique({

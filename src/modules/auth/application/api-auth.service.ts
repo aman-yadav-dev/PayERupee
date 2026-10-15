@@ -11,13 +11,20 @@ export class UnauthorizedError extends Error {
 
 // Ensure ForbiddenError is available if not importing from session-auth. Let's just define it here to be safe and independent.
 export class ApiForbiddenError extends Error {
-  constructor(message = "Forbidden") {
+  public code?: string;
+  public details?: string;
+  public action?: string;
+
+  constructor(message = "Forbidden", options?: { code?: string, details?: string, action?: string }) {
     super(message);
     this.name = "ForbiddenError"; // Must match "ForbiddenError" for controllers catching it by name, but actually let's just export a new one.
+    this.code = options?.code;
+    this.details = options?.details;
+    this.action = options?.action;
   }
 }
 
-export async function authenticateApiKey(authHeader: string | null): Promise<string> {
+export async function authenticateApiKey(authHeader: string | null): Promise<{ merchantProfileId: string, environment: "TEST" | "LIVE" }> {
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     throw new UnauthorizedError("Missing or invalid Authorization header");
   }
@@ -30,6 +37,7 @@ export async function authenticateApiKey(authHeader: string | null): Promise<str
     where: { keyHash },
     select: {
       merchantProfileId: true,
+      environment: true,
       isActive: true,
       expiresAt: true,
       merchantProfile: {
@@ -57,16 +65,28 @@ export async function authenticateApiKey(authHeader: string | null): Promise<str
   }
 
   if (!apiKey.merchantProfile) {
-    throw new ApiForbiddenError("No merchant profile associated with this API key");
+    throw new ApiForbiddenError("No merchant profile associated with this API key", {
+      code: "NO_MERCHANT_PROFILE",
+      details: "Your API key is valid, but your account does not have a merchant profile configured.",
+      action: "Complete your merchant registration."
+    });
   }
 
   if (apiKey.merchantProfile.accountStatus !== "ACTIVE") {
-    throw new ApiForbiddenError("Merchant account is not active");
+    throw new ApiForbiddenError("Merchant account is not active", {
+      code: "ACCOUNT_NOT_ACTIVE",
+      details: `Your account status is ${apiKey.merchantProfile.accountStatus}.`,
+      action: "Please contact support to activate your account."
+    });
   }
 
   const currentCycle = apiKey.merchantProfile.kycApplication?.cycles?.[0];
   if (currentCycle?.status !== "APPROVED") {
-    throw new ApiForbiddenError("Merchant KYC is not approved");
+    throw new ApiForbiddenError("Merchant KYC is not approved", {
+      code: "KYC_NOT_APPROVED",
+      details: `Your current KYC status is ${currentCycle?.status || "NOT_SUBMITTED"}. You cannot use the API until KYC is fully approved.`,
+      action: "Complete KYC verification in your dashboard."
+    });
   }
 
   // Update lastUsedAt in the background (fire-and-forget) to not block the request
@@ -75,5 +95,5 @@ export async function authenticateApiKey(authHeader: string | null): Promise<str
     data: { lastUsedAt: new Date() }
   }).catch(() => {});
 
-  return apiKey.merchantProfileId;
+  return { merchantProfileId: apiKey.merchantProfileId, environment: apiKey.environment as "TEST" | "LIVE" };
 }

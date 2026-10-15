@@ -59,7 +59,7 @@ describe("Notification Preferences API", () => {
     expect(res.status).toBe(401);
   });
 
-  it("3. Authenticated merchant with NO preference row returns TRUE/TRUE (opt-out model)", async () => {
+  it("3. Authenticated merchant with NO preference row returns TRUE/TRUE and PERSISTS the default", async () => {
     mockSession(mockUserId);
     const req = new NextRequest("http://localhost/api/v1/merchant/settings/notifications");
     const res = await GET(req);
@@ -69,9 +69,33 @@ describe("Notification Preferences API", () => {
     expect(body.data.loginEmailsEnabled).toBe(true);
     expect(body.data.kycEmailsEnabled).toBe(true);
     
-    // Ensure DB still has no row (do not pollute DB for default readers)
+    // Ensure DB row now exists and contains defaults
     const count = await db.notificationPreference.count();
-    expect(count).toBe(0);
+    expect(count).toBe(1);
+    
+    const dbRow = await db.notificationPreference.findUnique({ where: { userId: mockUserId } });
+    expect(dbRow!.loginEmailsEnabled).toBe(true);
+    expect(dbRow!.kycEmailsEnabled).toBe(true);
+  });
+
+  
+  it("3b. Authenticated merchant with EXISTING false preference remains false", async () => {
+    mockSession(mockUserId);
+    await db.notificationPreference.create({
+      data: { userId: mockUserId, loginEmailsEnabled: false, kycEmailsEnabled: true }
+    });
+
+    const req = new NextRequest("http://localhost/api/v1/merchant/settings/notifications");
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.data.loginEmailsEnabled).toBe(false);
+    expect(body.data.kycEmailsEnabled).toBe(true);
+    
+    // Ensure DB row still false
+    const dbRow = await db.notificationPreference.findUnique({ where: { userId: mockUserId } });
+    expect(dbRow!.loginEmailsEnabled).toBe(false);
   });
 
   it("4. PATCH loginEmailsEnabled=false persists correctly", async () => {

@@ -23,7 +23,8 @@ if (process.env.NODE_ENV !== "production") {
   globalThis.prismaGlobal = db;
   globalThis.pgPoolGlobal = pool;
   
-  if (process.env.NODE_ENV === "development") {
+  const isCli = process.argv.some(arg => arg.endsWith("seed.ts") || arg.endsWith("verify-deployment.ts") || arg.includes("vitest"));
+  if (process.env.NODE_ENV === "development" && !isCli) {
     const { startDevEmailOutboxScheduler } = require("../dev/dev-scheduler");
     startDevEmailOutboxScheduler();
   }

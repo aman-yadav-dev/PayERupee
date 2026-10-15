@@ -4,6 +4,7 @@ export interface ProviderDispatchResult {
   outcome: ProviderOutcome;
   providerReference?: string;
   failureReason?: string;
+  providerFailureDetails?: any;
 }
 
 export interface NormalizedWebhookEvent {
@@ -25,11 +26,12 @@ export interface IPayoutProvider {
   dispatch(
     payoutId: string,
     amount: string,
-    accountNumber: string,
-    ifscCode: string,
+    accountNumber: string | null,
+    ifscCode: string | null,
     mode: string,
-    accountHolderName: string,
-    beneficiaryPhone?: string | null
+    accountHolderName: string | null,
+    beneficiaryPhone?: string | null,
+    vpa?: string | null
   ): Promise<ProviderDispatchResult>;
 
   /**

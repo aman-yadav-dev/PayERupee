@@ -16,26 +16,34 @@ export const getResolvedAuthDestination = cache(async (): Promise<AuthDestinatio
     return resolveAuthDestination({ session: null, profile: null });
   }
 
-  const profile = await db.merchantProfile.findUnique({
-    where: { userId: session.user.id },
-    include: {
-      kycApplication: {
+  const userRecord = await db.user.findUnique({
+    where: { id: session.user.id },
+    select: {
+      role: true,
+      merchantProfile: {
         include: {
-          cycles: {
-            where: { isCurrentCycle: true },
-            take: 1,
-            select: { status: true, allowResubmission: true }
+          kycApplication: {
+            include: {
+              cycles: {
+                where: { isCurrentCycle: true },
+                take: 1,
+                select: { status: true, allowResubmission: true }
+              }
+            }
           }
         }
       }
     }
   });
 
+  const profile = userRecord?.merchantProfile ?? null;
+
   return resolveAuthDestination({
     session: {
       user: {
         id: session.user.id,
-        emailVerified: session.user.emailVerified
+        emailVerified: session.user.emailVerified,
+        role: userRecord?.role
       }
     },
     profile: profile ? {

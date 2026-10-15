@@ -15,25 +15,27 @@ describe("Payout Service Integration (Phase 3.1)", () => {
   let liabilityAccountId: string;
 
   beforeAll(async () => {
+    
+
     // Fail-Closed Test relies on settings existing for the rest of tests
     // so we ensure it exists here.
     const settingsCount = await db.systemSetting.count();
-    if (settingsCount === 0) {
-      await db.systemSetting.create({
-        data: {
+    
+      await db.systemSetting.upsert({
+        where: { id: "GLOBAL_SETTINGS" },
+        update: { minPayoutAmount: 1, maxPayoutAmount: 10000000 },
+        create: {
           id: "GLOBAL_SETTINGS",
-          upiPayoutFee: new Decimal(0),
-          impsPayoutFee: new Decimal(5),
-          neftPayoutFee: new Decimal(3),
-          rtgsPayoutFee: new Decimal(10),
-          taxPercentage: new Decimal(18),
-          minPayoutAmount: new Decimal(10),
-          maxPayoutAmount: new Decimal(500000),
+          upiPayoutFee: new Prisma.Decimal(0),
+          impsPayoutFee: new Prisma.Decimal(5),
+          neftPayoutFee: new Prisma.Decimal(3),
+          rtgsPayoutFee: new Prisma.Decimal(10),
+          taxPercentage: new Prisma.Decimal(18),
+          minPayoutAmount: 1,
+          maxPayoutAmount: 10000000,
         }
       });
-    }
-
-    const dummyUser = await db.user.create({
+      const dummyUser = await db.user.create({
       data: {
         email: `payout-vitest-${Date.now()}@example.com`,
         name: "Payout Test User",
@@ -69,7 +71,7 @@ describe("Payout Service Integration (Phase 3.1)", () => {
 
 
   const validPayoutData = () => ({
-    idempotencyKey: uuidv4(),
+    
     amount: "100.0",
     paymentMode: PaymentMode.IMPS,
     accountNumber: "1234567890",
@@ -80,19 +82,20 @@ describe("Payout Service Integration (Phase 3.1)", () => {
 
   it("should reject invalid Zod inputs (IFSC, E.164, min/max)", async () => {
     const invalidIfsc = { ...validPayoutData(), ifscCode: "BADIFSC" };
-    await expect(createPayout(merchantId, invalidIfsc)).rejects.toThrow();
+    await expect(createPayout(merchantId, "LIVE", uuidv4(), invalidIfsc)).rejects.toThrow();
 
     const invalidPhone = { ...validPayoutData(), beneficiaryPhone: "98765" };
-    await expect(createPayout(merchantId, invalidPhone)).rejects.toThrow();
+    await expect(createPayout(merchantId, "LIVE", uuidv4(), invalidPhone)).rejects.toThrow();
 
-    const underMin = { ...validPayoutData(), amount: "5.0" };
-    await expect(createPayout(merchantId, underMin)).rejects.toThrow("Amount must be between 10 and 500000");
+    const underMin = { ...validPayoutData(), amount: "0.5" };
+    await expect(createPayout(merchantId, "LIVE", uuidv4(), underMin)).rejects.toThrow("Amount must be between 1 and 10000000");
   });
 
   it("should enforce P2002 idempotency seamlessly", async () => {
     const data = validPayoutData();
-    const { payout: p1, isNew: isNew1 } = await createPayout(merchantId, data);
-    const { payout: p2, isNew: isNew2 } = await createPayout(merchantId, data);
+    const idem = uuidv4();
+    const { payout: p1, isNew: isNew1 } = await createPayout(merchantId, "LIVE", idem, data);
+    const { payout: p2, isNew: isNew2 } = await createPayout(merchantId, "LIVE", idem, data);
     
     expect(isNew1).toBe(true);
     expect(isNew2).toBe(false);
@@ -101,7 +104,8 @@ describe("Payout Service Integration (Phase 3.1)", () => {
 
   it("should handle true concurrency identically via Promise.allSettled", async () => {
     const data = validPayoutData();
-    const promises = Array.from({ length: 10 }).map(() => createPayout(merchantId, data));
+    const idem = uuidv4();
+    const promises = Array.from({ length: 10 }).map(() => createPayout(merchantId, "LIVE", idem, data));
     const results = await Promise.allSettled(promises);
     
     const fulfilled = results.filter(r => r.status === "fulfilled");
@@ -115,8 +119,8 @@ describe("Payout Service Integration (Phase 3.1)", () => {
   });
 
   it("should completely rollback on insufficient funds", async () => {
-    const huge = { ...validPayoutData(), amount: "499999.0" }; // Allowed by Max, but exceeds Wallet
-    const { payout } = await createPayout(merchantId, huge);
+    const huge = { ...validPayoutData(), amount: "9999999.0" }; // Allowed by Max, but exceeds Wallet
+    const { payout } = await createPayout(merchantId, "LIVE", uuidv4(), huge);
     
     await expect(processPayout(payout.id, merchantId)).rejects.toThrow("Insufficient wallet balance.");
     
@@ -126,7 +130,7 @@ describe("Payout Service Integration (Phase 3.1)", () => {
 
   it("should successfully process, transition states, and reconcile exact mathematical boundaries", async () => {
     const data = validPayoutData();
-    const { payout } = await createPayout(merchantId, data);
+    const { payout } = await createPayout(merchantId, "LIVE", uuidv4(), data);
     
     const processed = await processPayout(payout.id, merchantId);
     expect(processed.status).toBe("PROCESSING");
@@ -140,7 +144,7 @@ describe("Payout Service Integration (Phase 3.1)", () => {
 
   it("should successfully reverse, output compensating ledgers, and block duplicate reversals", async () => {
     const data = validPayoutData();
-    const { payout } = await createPayout(merchantId, data);
+    const { payout } = await createPayout(merchantId, "LIVE", uuidv4(), data);
     await processPayout(payout.id, merchantId);
     
     const reversed = await failPayout(payout.id, merchantId, "Failed by provider");

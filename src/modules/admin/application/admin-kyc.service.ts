@@ -30,7 +30,7 @@ export async function listKycApplications(page: number = 1, limit: number = 20, 
     db.kycApplication.count({ where }),
     db.kycApplication.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       skip: (page - 1) * limit,
       take: limit,
       select: {
@@ -126,12 +126,81 @@ export async function getKycApplicationDetail(applicationId: string) {
   }
 
   const active = application.cycles[0];
+  const fields = active?.formVersion?.fields || [];
+  const fieldMap = new Map<string, (typeof fields)[0]>(fields.map((f) => [f.id, f]));
+
+  const rawAnswers = active?.answers || [];
+  const missingFieldIds = rawAnswers
+    .map((a) => a.fieldDefinitionId)
+    .filter((id) => !fieldMap.has(id));
+
+  if (missingFieldIds.length > 0) {
+    const historicalFields = await db.kycFieldDefinition.findMany({
+      where: { id: { in: missingFieldIds } },
+    });
+    for (const hf of historicalFields) {
+      fieldMap.set(hf.id, hf as (typeof fields)[0]);
+    }
+  }
+
+  const acronyms = new Set(["PAN", "GST", "GSTIN", "UPI", "KYC", "IFSC", "ID", "LLP", "URL", "PDF"]);
+  const humanizeKey = (key: string) =>
+    key
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      .replace(/[-_]+/g, " ")
+      .trim()
+      .split(/\s+/)
+      .map((word) => {
+        const upper = word.toUpperCase();
+        if (acronyms.has(upper)) return upper;
+        if (word === word.toUpperCase()) return word;
+        return word.charAt(0).toUpperCase() + word.slice(1);
+      })
+      .join(" ");
+
+  const enrichedAnswers = rawAnswers.map((ans) => {
+    const def = fieldMap.get(ans.fieldDefinitionId);
+    let fieldLabel = "Unmapped field";
+    let isUnmapped = false;
+
+    if (!def) {
+      isUnmapped = true;
+    } else if (def.label && def.label.trim()) {
+      fieldLabel = def.label.trim();
+    } else if (def.key && def.key.trim()) {
+      fieldLabel = humanizeKey(def.key);
+    } else {
+      isUnmapped = true;
+    }
+
+    return {
+      id: ans.id,
+      fieldDefinitionId: ans.fieldDefinitionId,
+      fieldKey: def?.key || null,
+      fieldLabel,
+      fieldDescription: def?.description || null,
+      section: def?.section ? humanizeKey(def.section) : "General Information",
+      dataType: def?.dataType || "TEXT",
+      inputType: def?.inputType || "TEXT",
+      order: def?.orderIndex ?? 999,
+      isRequired: def?.isRequired ?? false,
+      isUnmapped,
+      value: ans.value,
+      createdAt: ans.createdAt,
+      updatedAt: ans.updatedAt,
+    };
+  });
+
+  enrichedAnswers.sort((a, b) => {
+    if (a.order !== b.order) return a.order - b.order;
+    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  });
   
   return {
     ...application,
     status: active?.status || KycStatus.PENDING_SUBMISSION,
     formVersion: active?.formVersion,
-    answers: active?.answers || [],
+    answers: enrichedAnswers,
     documents: active?.documents || []
   };
 }

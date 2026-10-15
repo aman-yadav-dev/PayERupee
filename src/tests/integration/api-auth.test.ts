@@ -35,6 +35,12 @@ describe("M2M Payouts API Authentication & Authorization", () => {
   });
 
   async function createMerchantWithKey(accountStatus: string, kycStatus: string | null, keyIsActive: boolean = true) {
+    if (!await db.ledgerAccount.findFirst({ where: { type: "SYSTEM_TRANSIT" } })) {
+      await db.ledgerAccount.create({ data: { type: "SYSTEM_TRANSIT", isActive: true } });
+    }
+    if (!await db.ledgerAccount.findFirst({ where: { type: "SYSTEM_REVENUE" } })) {
+      await db.ledgerAccount.create({ data: { type: "SYSTEM_REVENUE", isActive: true } });
+    }
     await db.user.create({ data: { id: mockUserId, name: "API User", email: "api@test.com" } });
     await db.merchantProfile.create({
       data: { id: mockMerchantId, userId: mockUserId, businessName: "API Merchant", accountStatus: accountStatus as any }
@@ -69,11 +75,11 @@ describe("M2M Payouts API Authentication & Authorization", () => {
     if (authHeader !== null) {
       headers.set("Authorization", authHeader);
     }
-    return new NextRequest("http://localhost/api/v1/payouts", {
+    headers.set("Idempotency-Key", "idem-" + Date.now()); return new NextRequest("http://localhost/api/v1/payouts", {
       method: "POST",
       headers,
       body: JSON.stringify({
-        idempotencyKey: "idem-" + Date.now(),
+        
         amount: 10,
         paymentMode: "IMPS",
         accountNumber: "1234567890",

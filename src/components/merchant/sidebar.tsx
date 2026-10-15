@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Receipt, Code2, LogOut, Settings } from "lucide-react";
+import { LayoutDashboard, Receipt, Code2, LogOut, Settings, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function Sidebar() {
@@ -13,7 +13,8 @@ export function Sidebar() {
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { name: "Transactions", href: "/transactions", icon: Receipt },
     { name: "API Keys", href: "/developers/api-keys", icon: Code2 },
-    { name: "Settings", href: "/settings/notifications", icon: Settings },
+    { name: "Bans", href: "/settings/bans", icon: ShieldAlert },
+    { name: "Settings", href: "/settings/profile", icon: Settings },
   ];
 
   const handleLogout = async () => {

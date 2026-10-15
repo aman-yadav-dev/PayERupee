@@ -4,13 +4,15 @@ import { acquireSystemLease, releaseSystemLease } from "@/modules/system/domain/
 import { failPayout, handlePayoutSuccess } from "@/modules/payout/domain/payout.service";
 import { logger } from "@/infrastructure/logger/logger";
 
+import { getPayoutProvider } from "@/modules/provider/adapters/provider.factory";
+
 const MAX_RETRIES = 5;
 
 /**
  * Background worker to sweep and retry PENDING OutboxEvents.
  * Safe to run concurrently across multiple processes due to SystemLease locking.
  */
-export async function processOutbox(workerId: string, provider: IPayoutProvider) {
+export async function processOutbox(workerId: string) {
   const LEASE_RESOURCE = "OUTBOX_SWEEPER";
   
   // 1. Acquire Lease
@@ -85,6 +87,7 @@ export async function processOutbox(workerId: string, provider: IPayoutProvider)
 
       // Attempt dispatch (Only if attempts == 0)
       try {
+        const provider = getPayoutProvider(payout.environment as "TEST" | "LIVE");
         const result = await provider.dispatch(
           payout.id,
           payout.amount.toString(),
@@ -92,7 +95,8 @@ export async function processOutbox(workerId: string, provider: IPayoutProvider)
           payout.ifscCode,
           payout.paymentMode,
           payout.accountHolderName,
-          payout.beneficiaryPhone
+          payout.beneficiaryPhone,
+          payout.vpa
         );
 
         if (result.outcome === "REJECTED") {

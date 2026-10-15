@@ -20,27 +20,33 @@ export class PayoutReconciler {
     }
 
     try {
-      // 1. Get threshold from SystemSettings
-      const settings = await db.systemSetting.findUnique({ where: { id: "GLOBAL_SETTINGS" } });
-      const thresholdMins = settings?.reconciliationThresholdMins ?? 15;
-      const thresholdDate = new Date(Date.now() - thresholdMins * 60 * 1000);
+      // 1. Minimum 30-second delay for all processing payouts before FIRST check
+      const thirtySecondsAgo = new Date(Date.now() - 30 * 1000);
+      const testThresholdDate = new Date(Date.now() - 10 * 1000);
 
       // 2. Find PROCESSING payouts that haven't been updated recently AND whose Outbox is no longer PENDING.
-      // If the Outbox is PENDING, we must NOT poll, because the dispatch network request hasn't finished its retries.
-      const stalePayouts = await db.payout.findMany({
+      const processingPayouts = await db.payout.findMany({
         where: {
           status: PayoutStatus.PROCESSING,
-          updatedAt: { lt: thresholdDate },
-          // Check that OutboxEvent is NOT PENDING.
-          // In Prisma, we can do this by checking the relation:
-          // Wait, Prisma doesn't easily allow filtering by relation without include unless using some syntax,
-          // but we can just query payouts, then check outbox. Or use some relation filter.
+          OR: [
+            {
+              environment: "LIVE",
+              updatedAt: { lt: thirtySecondsAgo }
+            },
+            {
+              environment: "TEST",
+              updatedAt: { lt: testThresholdDate }
+            }
+          ]
         },
         select: {
           id: true,
           merchantProfileId: true,
           status: true,
-          providerReference: true
+          providerReference: true,
+          environment: true,
+          createdAt: true,
+          updatedAt: true,
         },
       });
 
@@ -51,10 +57,27 @@ export class PayoutReconciler {
         errors: 0
       };
 
-      const provider = getPayoutProvider();
+      console.log(`Found ${processingPayouts.length} processing payouts`);
+      for (const payout of processingPayouts) {
+        if (payout.environment === "LIVE") {
+          const elapsedSinceCreation = Date.now() - payout.createdAt.getTime();
+          const timeSinceLastPoll = Date.now() - payout.updatedAt.getTime();
+          
+          let requiredBackoff = 30 * 1000;
+          if (elapsedSinceCreation > 30 * 60 * 1000) requiredBackoff = 15 * 60 * 1000; // >30m -> 15m backoff
+          else if (elapsedSinceCreation > 10 * 60 * 1000) requiredBackoff = 5 * 60 * 1000; // >10m -> 5m backoff
+          else if (elapsedSinceCreation > 5 * 60 * 1000) requiredBackoff = 2 * 60 * 1000; // >5m -> 2m backoff
+          else if (elapsedSinceCreation > 2 * 60 * 1000) requiredBackoff = 60 * 1000; // >2m -> 60s backoff
+          
+          console.log(`LIVE payout ${payout.id}: elapsed=${elapsedSinceCreation}, lastPoll=${timeSinceLastPoll}, required=${requiredBackoff}`);
+          if (timeSinceLastPoll < requiredBackoff) {
+            console.log(`Skipping payout ${payout.id} due to backoff`);
+            continue; // Backoff period has not elapsed yet
+          }
+        }
 
-      for (const payout of stalePayouts) {
         try {
+          const provider = getPayoutProvider(payout.environment as "TEST" | "LIVE");
           // Verify Outbox state before polling
           const outbox = await db.outboxEvent.findUnique({ where: { referenceId: payout.id } });
           if (outbox && outbox.status === "PENDING") {
@@ -69,7 +92,7 @@ export class PayoutReconciler {
             await handlePayoutSuccess(payout.id, payout.merchantProfileId, statusRes.providerReference);
             results.processingSettled++;
           } else if (statusRes.outcome === "REJECTED") {
-            await failPayout(payout.id, payout.merchantProfileId, statusRes.failureReason || "Reconciled as failed");
+            await failPayout(payout.id, payout.merchantProfileId, statusRes.failureReason || "Reconciled as failed", statusRes.providerFailureDetails);
             results.processingFailed++;
           } else {
             // "QUEUED", "TIMEOUT", "NETWORK_ERROR", "NOT_FOUND"
@@ -85,7 +108,7 @@ export class PayoutReconciler {
           if (error instanceof IllegalStateTransitionError) {
             // Concurrency: Another webhook or worker resolved it first. Safe collision.
           } else {
-            console.error(`Error reconciling payout ${payout.id}:`, error);
+            logger.error(`Error reconciling payout ${payout.id}:`, error);
             results.errors++;
           }
         }

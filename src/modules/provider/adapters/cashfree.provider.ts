@@ -1,3 +1,4 @@
+import { logger } from "@/infrastructure/logger/logger";
 import { IPayoutProvider, ProviderDispatchResult, NormalizedWebhookEvent } from "@/modules/provider/core/provider.interface";
 import { env } from "@/config/env";
 import crypto from "crypto";
@@ -21,11 +22,12 @@ export class CashfreePayoutProvider implements IPayoutProvider {
   async dispatch(
     payoutId: string,
     amount: string,
-    accountNumber: string,
-    ifscCode: string,
+    accountNumber: string | null,
+    ifscCode: string | null,
     mode: string,
-    accountHolderName: string,
-    beneficiaryPhone?: string | null
+    accountHolderName: string | null,
+    beneficiaryPhone?: string | null,
+    vpa?: string | null
   ): Promise<ProviderDispatchResult> {
     const baseUrl = this.getBaseUrl();
     const headers = this.getHeaders();
@@ -33,7 +35,7 @@ export class CashfreePayoutProvider implements IPayoutProvider {
     // 1. Generate a deterministic beneficiary ID
     const beneId = crypto
       .createHash("md5")
-      .update(`${accountNumber}_${ifscCode}`)
+      .update(`${accountNumber || ""}_${ifscCode || ""}`)
       .digest("hex")
       .substring(0, 30);
 
@@ -44,7 +46,7 @@ export class CashfreePayoutProvider implements IPayoutProvider {
         headers,
         body: JSON.stringify({
           beneId,
-          name: accountHolderName,
+          name: accountHolderName || "Unknown",
           email: "merchant@payerupee.com",
           phone: beneficiaryPhone || "9999999999",
           bankAccount: accountNumber,
@@ -60,7 +62,7 @@ export class CashfreePayoutProvider implements IPayoutProvider {
         const errBody = await addBeneRes.json().catch(() => ({}));
         // If it already exists, we can proceed. Otherwise, fail.
         if (errBody.code !== "BENEFICIARY_ALREADY_EXISTS" && errBody.message !== "Beneficiary already exists") {
-          console.error("Cashfree Add Beneficiary Failed", addBeneRes.status, errBody);
+          logger.error("Cashfree Add Beneficiary Failed", addBeneRes.status, errBody);
           // If 5xx or rate limit/auth, it's a network/system error, not a definitive rejection of the bank account
           if (addBeneRes.status >= 500 || [401, 403, 429].includes(addBeneRes.status)) {
             return { outcome: "NETWORK_ERROR", failureReason: "System error adding beneficiary" };
@@ -72,7 +74,7 @@ export class CashfreePayoutProvider implements IPayoutProvider {
         }
       }
     } catch (e) {
-      console.error("Cashfree Add Beneficiary Network Error", e);
+      logger.error("Cashfree Add Beneficiary Network Error", e);
       return { outcome: "NETWORK_ERROR", failureReason: "Network error adding beneficiary" };
     }
 
@@ -95,7 +97,7 @@ export class CashfreePayoutProvider implements IPayoutProvider {
       const data = await transferRes.json().catch(() => ({}));
 
       if (!transferRes.ok) {
-        console.error("Cashfree Transfer Failed", transferRes.status, data);
+        logger.error("Cashfree Transfer Failed", transferRes.status, data);
         
         // 5xx or gateway timeouts are ambiguous -> TIMEOUT/NETWORK_ERROR
         if (transferRes.status >= 500) {
@@ -119,7 +121,7 @@ export class CashfreePayoutProvider implements IPayoutProvider {
         providerReference: data.reference_id?.toString() || payoutId,
       };
     } catch (e) {
-      console.error("Cashfree Transfer Network Error", e);
+      logger.error("Cashfree Transfer Network Error", e);
       return { outcome: "NETWORK_ERROR", failureReason: "Network error initiating transfer" };
     }
   }

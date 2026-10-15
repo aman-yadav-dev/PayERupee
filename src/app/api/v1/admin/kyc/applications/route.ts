@@ -1,3 +1,4 @@
+import { logger } from "@/infrastructure/logger/logger";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/modules/auth/application/session-auth.service";
 import { listKycApplications } from "@/modules/admin/application/admin-kyc.service";
@@ -14,12 +15,12 @@ export async function GET(req: NextRequest) {
 
     const result = await listKycApplications(page, limit, status);
     
-    return NextResponse.json(result, { status: 200 });
+    return NextResponse.json({ success: true, data: result.data, meta: result.meta }, { status: 200 });
   } catch (error) {
     if (error instanceof UnauthorizedError) return NextResponse.json({ error: error.message }, { status: 401 });
     if (error instanceof ForbiddenError) return NextResponse.json({ error: error.message }, { status: 403 });
     if (error instanceof KycValidationError) return NextResponse.json({ error: error.message }, { status: 400 });
-    console.error("[GET /api/v1/admin/kyc/applications]", error);
+    logger.error("[GET /api/v1/admin/kyc/applications]", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

@@ -114,4 +114,47 @@ describe("Edge Middleware Security", () => {
       expect(setCookieHeader).toBeNull();
     });
   });
+
+  describe("Admin Route & API Protection", () => {
+    it("should redirect unauthenticated /admin/dashboard to /admin/login", () => {
+      const req = createMockRequest("/admin/dashboard");
+      const res = middleware(req);
+      expect(res.status).toBe(307);
+      expect(res.headers.get("location")).toBe("http://localhost:3000/admin/login?callbackUrl=%2Fadmin%2Fdashboard");
+    });
+
+    it("should allow unauthenticated access to /admin/login", () => {
+      const req = createMockRequest("/admin/login");
+      const res = middleware(req);
+      expect(res.status).not.toBe(307);
+      expect(res.status).not.toBe(401);
+    });
+
+    it("should allow /admin/dashboard when better-auth.session_token is present", () => {
+      const req = createMockRequest("/admin/dashboard");
+      req.cookies.set("better-auth.session_token", "valid-token");
+      const res = middleware(req);
+      expect(res.status).not.toBe(307);
+      expect(res.status).not.toBe(401);
+    });
+
+    it("should return 401 for /api/v1/admin/merchants without session or auth header", () => {
+      const req = createMockRequest("/api/v1/admin/merchants");
+      const res = middleware(req);
+      expect(res.status).toBe(401);
+    });
+
+    it("should allow /api/v1/admin/merchants when better-auth.session_token is present", () => {
+      const req = createMockRequest("/api/v1/admin/merchants");
+      req.cookies.set("better-auth.session_token", "valid-token");
+      const res = middleware(req);
+      expect(res.status).not.toBe(401);
+    });
+
+    it("should allow /api/v1/admin/merchants when Authorization header is present", () => {
+      const req = createMockRequest("/api/v1/admin/merchants", "Bearer test-admin-token");
+      const res = middleware(req);
+      expect(res.status).not.toBe(401);
+    });
+  });
 });

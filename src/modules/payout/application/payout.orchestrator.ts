@@ -1,3 +1,4 @@
+import { logger } from "@/infrastructure/logger/logger";
 import { processPayout, failPayout, handlePayoutSuccess } from "@/modules/payout/domain/payout.service";
 import { IPayoutProvider } from "@/modules/provider/core/provider.interface";
 import { db } from "@/infrastructure/database/db";
@@ -6,7 +7,12 @@ import { db } from "@/infrastructure/database/db";
  * Orchestrates the dispatch of a payout to the external provider.
  * Ensures the database transaction completes fully BEFORE external network boundaries are crossed.
  */
-export async function dispatchPayout(payoutId: string, merchantProfileId: string, provider: IPayoutProvider) {
+export async function dispatchPayout(payoutId: string, merchantProfileId: string, environment: "TEST" | "LIVE", provider: IPayoutProvider) {
+  // SAFETY INVARIANT: Ensure TEST environment NEVER uses PayMyQrPayoutProvider
+  if (environment === "TEST" && provider.constructor.name === "PayMyQrPayoutProvider") {
+    throw new Error("CRITICAL SECURITY VIOLATION: Attempted to route TEST payout to LIVE PayMyQrPayoutProvider");
+  }
+
   // 1. Database Boundary (Atomic processing and wallet deduction)
   // This creates the OutboxEvent atomically.
   const processedPayout = await processPayout(payoutId, merchantProfileId);
@@ -20,7 +26,8 @@ export async function dispatchPayout(payoutId: string, merchantProfileId: string
       processedPayout.ifscCode,
       processedPayout.paymentMode,
       processedPayout.accountHolderName,
-      processedPayout.beneficiaryPhone
+      processedPayout.beneficiaryPhone,
+      processedPayout.vpa
     );
 
     // 3. Post-Dispatch Handling
@@ -30,7 +37,7 @@ export async function dispatchPayout(payoutId: string, merchantProfileId: string
         where: { referenceId: processedPayout.id },
         data: { status: "COMPLETED", lockedBy: null, lockedUntil: null }
       });
-      return await failPayout(processedPayout.id, merchantProfileId, result.failureReason || "Provider rejected payout");
+      return await failPayout(processedPayout.id, merchantProfileId, result.failureReason || "Provider rejected payout", result.providerFailureDetails);
     }
 
     if (result.outcome === "SUCCESS" || result.outcome === "QUEUED") {
@@ -79,7 +86,7 @@ export async function dispatchPayout(payoutId: string, merchantProfileId: string
     return processedPayout;
   } catch (error) {
     // Network error, ambiguous timeout, or unexpected exception.
-    console.error(`Network or dispatch error for payout ${payoutId}:`, error);
+    logger.error(`Network or dispatch error for payout ${payoutId}:`, error);
     
     await db.outboxEvent.update({
       where: { referenceId: processedPayout.id },
