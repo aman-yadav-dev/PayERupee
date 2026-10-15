@@ -326,14 +326,27 @@ export function GoogleButton({ callbackURL = "/auth-sync" }: { callbackURL?: str
     try {
       setLoading(true);
       const { signIn } = await import("@/modules/auth/infrastructure/auth-client");
-      await signIn.social({
+      const res = await signIn.social({
         provider: "google",
         callbackURL,
       });
+
+      if (res?.error) {
+        const { toast } = await import("sonner");
+        toast.error(
+          res.error.message ||
+            "Google Sign-In is not enabled on this deployment. Please sign in with your email and password."
+        );
+        setLoading(false);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to initialize Google Sign-In";
       const { toast } = await import("sonner");
-      toast.error(msg);
+      toast.error(
+        msg.includes("not found") || msg.includes("provider")
+          ? "Google Sign-In is not enabled on this deployment. Please sign in with email and password."
+          : msg
+      );
       setLoading(false);
     }
   }
