@@ -392,8 +392,8 @@ export default function AdminBansPage() {
       {/* Tab 1: Pending Requests */}
       {activeTab === "pending" && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="relative flex-1 max-w-md">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="relative flex-1 max-w-full sm:max-w-md">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
               <input
                 type="text"
@@ -403,22 +403,22 @@ export default function AdminBansPage() {
                 className="w-full pl-9 pr-4 py-2 text-sm bg-surface border border-line rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
               />
             </div>
-            <div className="text-xs text-text-muted">
+            <div className="text-xs text-text-muted shrink-0">
               {filteredRequests.length} request(s) awaiting review
             </div>
           </div>
 
           <div className="bg-canvas border border-line rounded-2xl overflow-hidden shadow-sm">
             <div className="overflow-x-auto table-scrollbar">
-              <table className="w-full min-w-[820px] text-left text-sm">
+              <table className="w-full text-left text-sm">
                 <thead className="bg-surface border-b border-line text-text-muted font-medium text-xs uppercase tracking-wider">
                   <tr>
-                    <th className="px-6 py-4">Date</th>
-                    <th className="px-6 py-4">Merchant Profile ID</th>
-                    <th className="px-6 py-4">Destination Type</th>
-                    <th className="px-6 py-4">Masked Destination</th>
-                    <th className="px-6 py-4">Reason</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
+                    <th className="hidden md:table-cell px-3 sm:px-6 py-3.5">Date</th>
+                    <th className="hidden lg:table-cell px-3 sm:px-6 py-3.5">Merchant Profile ID</th>
+                    <th className="hidden sm:table-cell px-3 sm:px-6 py-3.5">Destination Type</th>
+                    <th className="px-3 sm:px-6 py-3.5">Destination</th>
+                    <th className="hidden sm:table-cell px-3 sm:px-6 py-3.5">Reason</th>
+                    <th className="px-3 sm:px-6 py-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
@@ -453,10 +453,10 @@ export default function AdminBansPage() {
                         }}
                         className="hover:bg-surface/50 transition-colors cursor-pointer group"
                       >
-                        <td className="px-6 py-4 text-text-secondary whitespace-nowrap text-xs">
+                        <td className="hidden md:table-cell px-3 sm:px-6 py-3.5 sm:py-4 text-text-secondary whitespace-nowrap text-xs">
                           {formatDateTimeIST(req.createdAt)}
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="hidden lg:table-cell px-3 sm:px-6 py-3.5 sm:py-4">
                           <div className="font-medium text-text-primary text-xs font-mono">
                             {req.merchantProfile?.businessName || req.merchantProfileId}
                           </div>
@@ -466,7 +466,7 @@ export default function AdminBansPage() {
                             </div>
                           )}
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="hidden sm:table-cell px-3 sm:px-6 py-3.5 sm:py-4">
                           <span
                             className={cn(
                               "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium",
@@ -483,13 +483,37 @@ export default function AdminBansPage() {
                             {req.destinationType === "UPI" ? "UPI VPA" : "Bank Account"}
                           </span>
                         </td>
-                        <td className="px-6 py-4 font-mono font-medium text-text-primary">
-                          {req.maskedDestination}
+                        <td className="px-3 sm:px-6 py-3.5 sm:py-4">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={cn(
+                                "sm:hidden p-1 rounded-md text-xs shrink-0",
+                                req.destinationType === "UPI"
+                                  ? "bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300"
+                                  : "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                              )}
+                              title={req.destinationType === "UPI" ? "UPI VPA" : "Bank Account"}
+                            >
+                              {req.destinationType === "UPI" ? (
+                                <Smartphone className="w-3.5 h-3.5" />
+                              ) : (
+                                <Landmark className="w-3.5 h-3.5" />
+                              )}
+                            </span>
+                            <div className="min-w-0">
+                              <div className="font-mono font-medium text-text-primary text-xs sm:text-sm truncate">
+                                {req.maskedDestination}
+                              </div>
+                              <div className="text-[11px] text-text-muted lg:hidden truncate max-w-[150px] sm:max-w-[200px]">
+                                From: {req.merchantProfile?.businessName || req.merchantProfileId}
+                              </div>
+                            </div>
+                          </div>
                         </td>
-                        <td className="px-6 py-4 text-text-secondary max-w-xs truncate" title={req.reason}>
+                        <td className="hidden sm:table-cell px-3 sm:px-6 py-3.5 sm:py-4 text-text-secondary max-w-xs truncate" title={req.reason}>
                           {req.reason}
                         </td>
-                        <td className="px-6 py-4 text-right">
+                        <td className="px-3 sm:px-6 py-3.5 sm:py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={(e) => {
@@ -528,8 +552,8 @@ export default function AdminBansPage() {
       {/* Tab 2: Active Global Bans */}
       {activeTab === "active" && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="relative flex-1 max-w-md">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="relative flex-1 max-w-full sm:max-w-md">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
               <input
                 type="text"
@@ -539,23 +563,23 @@ export default function AdminBansPage() {
                 className="w-full pl-9 pr-4 py-2 text-sm bg-surface border border-line rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
               />
             </div>
-            <div className="text-xs text-text-muted">
+            <div className="text-xs text-text-muted shrink-0">
               {filteredBans.length} platform-wide active ban(s)
             </div>
           </div>
 
           <div className="bg-canvas border border-line rounded-2xl overflow-hidden shadow-sm">
             <div className="overflow-x-auto table-scrollbar">
-              <table className="w-full min-w-[820px] text-left text-sm">
+              <table className="w-full text-left text-sm">
                 <thead className="bg-surface border-b border-line text-text-muted font-medium text-xs uppercase tracking-wider">
                   <tr>
-                    <th className="px-6 py-4">Date Activated</th>
-                    <th className="px-6 py-4">Destination Type</th>
-                    <th className="px-6 py-4">Masked Destination</th>
-                    <th className="px-6 py-4">Reason</th>
-                    <th className="px-6 py-4">Source Request ID</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
+                    <th className="hidden md:table-cell px-3 sm:px-6 py-3.5">Date Activated</th>
+                    <th className="hidden sm:table-cell px-3 sm:px-6 py-3.5">Destination Type</th>
+                    <th className="px-3 sm:px-6 py-3.5">Masked Destination</th>
+                    <th className="hidden sm:table-cell px-3 sm:px-6 py-3.5">Reason</th>
+                    <th className="hidden lg:table-cell px-3 sm:px-6 py-3.5">Source Request ID</th>
+                    <th className="px-3 sm:px-6 py-3.5">Status</th>
+                    <th className="px-3 sm:px-6 py-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
@@ -590,10 +614,10 @@ export default function AdminBansPage() {
                         }}
                         className="hover:bg-surface/50 transition-colors cursor-pointer group"
                       >
-                        <td className="px-6 py-4 text-text-secondary whitespace-nowrap text-xs">
+                        <td className="hidden md:table-cell px-3 sm:px-6 py-3.5 sm:py-4 text-text-secondary whitespace-nowrap text-xs">
                           {formatDateTimeIST(ban.createdAt)}
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="hidden sm:table-cell px-3 sm:px-6 py-3.5 sm:py-4">
                           <span
                             className={cn(
                               "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium",
@@ -610,13 +634,32 @@ export default function AdminBansPage() {
                             {ban.destinationType === "UPI" ? "UPI VPA" : "Bank Account"}
                           </span>
                         </td>
-                        <td className="px-6 py-4 font-mono font-medium text-text-primary">
-                          {ban.maskedDestination}
+                        <td className="px-3 sm:px-6 py-3.5 sm:py-4 font-mono font-medium text-text-primary">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={cn(
+                                "sm:hidden p-1 rounded-md text-xs shrink-0",
+                                ban.destinationType === "UPI"
+                                  ? "bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300"
+                                  : "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                              )}
+                              title={ban.destinationType === "UPI" ? "UPI VPA" : "Bank Account"}
+                            >
+                              {ban.destinationType === "UPI" ? (
+                                <Smartphone className="w-3.5 h-3.5" />
+                              ) : (
+                                <Landmark className="w-3.5 h-3.5" />
+                              )}
+                            </span>
+                            <span className="truncate text-xs sm:text-sm">
+                              {ban.maskedDestination}
+                            </span>
+                          </div>
                         </td>
-                        <td className="px-6 py-4 text-text-secondary max-w-xs truncate" title={ban.reason}>
+                        <td className="hidden sm:table-cell px-3 sm:px-6 py-3.5 sm:py-4 text-text-secondary max-w-xs truncate" title={ban.reason}>
                           {ban.reason}
                         </td>
-                        <td className="px-6 py-4 text-xs font-mono text-text-muted">
+                        <td className="hidden lg:table-cell px-3 sm:px-6 py-3.5 sm:py-4 text-xs font-mono text-text-muted">
                           {ban.sourceRequestId ? (
                             <span title={ban.sourceRequestId}>
                               {ban.sourceRequestId.slice(0, 10)}...
@@ -625,24 +668,26 @@ export default function AdminBansPage() {
                             "—"
                           )}
                         </td>
-                        <td className="px-6 py-4">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 border border-red-200/60">
+                        <td className="px-3 sm:px-6 py-3.5 sm:py-4">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 border border-red-200/60 whitespace-nowrap">
                             <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse" />
-                            Active Global Ban
+                            <span className="hidden sm:inline">Active Global Ban</span>
+                            <span className="sm:hidden">Active</span>
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-right">
+                        <td className="px-3 sm:px-6 py-3.5 sm:py-4 text-right">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               setRemovingTarget(ban);
                               setRemovalReason("");
                             }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-900/40 border border-red-200 dark:border-red-800/40 rounded-lg transition-colors"
+                            className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-900/40 border border-red-200 dark:border-red-800/40 rounded-lg transition-colors whitespace-nowrap"
                             title="Remove Global Ban"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
-                            <span>Remove Ban</span>
+                            <span className="hidden sm:inline">Remove Ban</span>
+                            <span className="sm:hidden">Remove</span>
                           </button>
                         </td>
                       </tr>
@@ -705,7 +750,7 @@ export default function AdminBansPage() {
               Notice: Approving this request will immediately reject any future payout to this recipient across EVERY merchant on the platform.
             </div>
 
-            <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-line-soft">
+            <div className="sticky bottom-0 -mx-6 -mb-6 px-6 py-4 border-t border-line-soft bg-surface/95 backdrop-blur-sm flex items-center justify-end gap-2.5 shrink-0">
               <button
                 type="button"
                 onClick={() => setApprovingTarget(null)}
@@ -773,7 +818,7 @@ export default function AdminBansPage() {
               />
             </div>
 
-            <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-line-soft">
+            <div className="sticky bottom-0 -mx-6 -mb-6 px-6 py-4 border-t border-line-soft bg-surface/95 backdrop-blur-sm flex items-center justify-end gap-2.5 shrink-0">
               <button
                 type="button"
                 onClick={() => setRejectingTarget(null)}
@@ -845,7 +890,7 @@ export default function AdminBansPage() {
               Warning: Lifting this ban will re-enable payouts to this recipient across the entire PayERupee network, unless a merchant has an active local ban.
             </div>
 
-            <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-line-soft">
+            <div className="sticky bottom-0 -mx-6 -mb-6 px-6 py-4 border-t border-line-soft bg-surface/95 backdrop-blur-sm flex items-center justify-end gap-2.5 shrink-0">
               <button
                 type="button"
                 onClick={() => setRemovingTarget(null)}

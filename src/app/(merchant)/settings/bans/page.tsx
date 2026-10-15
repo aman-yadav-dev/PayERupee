@@ -533,12 +533,12 @@ export default function MerchantBansPage() {
               <table className="w-full text-left text-sm">
                 <thead className="bg-canvas/60 border-b border-line text-xs font-medium uppercase tracking-wider text-text-muted">
                   <tr>
-                    <th className="hidden sm:table-cell px-4 sm:px-6 py-3.5">Type</th>
-                    <th className="px-4 sm:px-6 py-3.5">Destination</th>
-                    <th className="px-4 sm:px-6 py-3.5">Reason</th>
-                    <th className="px-4 sm:px-6 py-3.5">Status</th>
-                    <th className="hidden sm:table-cell px-4 sm:px-6 py-3.5">Created Date</th>
-                    <th className="px-4 sm:px-6 py-3.5 text-right">Actions</th>
+                    <th className="hidden sm:table-cell px-3 sm:px-6 py-3.5">Type</th>
+                    <th className="px-3 sm:px-6 py-3.5">Destination</th>
+                    <th className="px-3 sm:px-6 py-3.5">Reason</th>
+                    <th className="px-3 sm:px-6 py-3.5">Status</th>
+                    <th className="hidden sm:table-cell px-3 sm:px-6 py-3.5">Created Date</th>
+                    <th className="px-3 sm:px-6 py-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
@@ -570,7 +570,7 @@ export default function MerchantBansPage() {
                       const isActive = ban.status === "ACTIVE";
                       return (
                         <tr key={ban.id} className="hover:bg-canvas/40 transition-colors">
-                          <td className="hidden sm:table-cell px-4 sm:px-6 py-4">
+                          <td className="hidden sm:table-cell px-3 sm:px-6 py-3.5 sm:py-4">
                             <span
                               className={cn(
                                 "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium",
@@ -587,7 +587,7 @@ export default function MerchantBansPage() {
                               {ban.destinationType === "UPI" ? "UPI VPA" : "Bank Account"}
                             </span>
                           </td>
-                          <td className="px-4 sm:px-6 py-4">
+                          <td className="px-3 sm:px-6 py-3.5 sm:py-4">
                             <div className="flex items-center gap-2">
                               <span
                                 className={cn(
@@ -604,45 +604,46 @@ export default function MerchantBansPage() {
                                   <Landmark className="w-3.5 h-3.5" />
                                 )}
                               </span>
-                              <span className="font-mono font-medium text-text-primary text-xs sm:text-sm">
+                              <span className="font-mono font-medium text-text-primary text-xs sm:text-sm truncate max-w-[130px] sm:max-w-none block">
                                 {ban.maskedDestination}
                               </span>
                             </div>
                           </td>
-                          <td className="px-4 sm:px-6 py-4 text-text-secondary max-w-xs truncate" title={ban.reason}>
+                          <td className="px-3 sm:px-6 py-3.5 sm:py-4 text-text-secondary max-w-[120px] sm:max-w-xs truncate" title={ban.reason}>
                             {ban.reason}
                           </td>
-                          <td className="px-4 sm:px-6 py-4">
+                          <td className="px-3 sm:px-6 py-3.5 sm:py-4">
                             {isActive ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 border border-red-200/60 dark:border-red-800/40">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 border border-red-200/60 dark:border-red-800/40 whitespace-nowrap">
                                 <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse" />
-                                Active Ban
+                                <span className="hidden sm:inline">Active Ban</span>
+                                <span className="sm:hidden">Active</span>
                               </span>
                             ) : (
                               <div className="space-y-0.5">
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 whitespace-nowrap">
                                   <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
                                   Unbanned
                                 </span>
                                 {ban.unbanReason && (
-                                  <p className="text-[11px] text-text-muted truncate max-w-[200px]" title={ban.unbanReason}>
+                                  <p className="text-[11px] text-text-muted truncate max-w-[140px] sm:max-w-[200px]" title={ban.unbanReason}>
                                     Reason: {ban.unbanReason}
                                   </p>
                                 )}
                               </div>
                             )}
                           </td>
-                          <td className="hidden sm:table-cell px-4 sm:px-6 py-4 text-text-muted text-xs whitespace-nowrap">
+                          <td className="hidden sm:table-cell px-3 sm:px-6 py-3.5 sm:py-4 text-text-muted text-xs whitespace-nowrap">
                             {formatDateTimeIST(ban.createdAt)}
                           </td>
-                          <td className="px-4 sm:px-6 py-4 text-right">
+                          <td className="px-3 sm:px-6 py-3.5 sm:py-4 text-right whitespace-nowrap">
                             {isActive ? (
                               <button
                                 onClick={() => {
                                   setUnbanTarget(ban);
                                   setUnbanReason("");
                                 }}
-                                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-900/40 border border-amber-200 dark:border-amber-800/40 rounded-lg transition-colors"
+                                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-900/40 border border-amber-200 dark:border-amber-800/40 rounded-lg transition-colors whitespace-nowrap"
                               >
                                 <Undo2 className="w-3.5 h-3.5" />
                                 <span>Unban</span>
@@ -686,13 +687,13 @@ export default function MerchantBansPage() {
               <table className="w-full text-left text-sm">
                 <thead className="bg-canvas/60 border-b border-line text-xs font-medium uppercase tracking-wider text-text-muted">
                   <tr>
-                    <th className="hidden sm:table-cell px-4 sm:px-6 py-3.5">Type</th>
-                    <th className="px-4 sm:px-6 py-3.5">Destination</th>
-                    <th className="px-4 sm:px-6 py-3.5">Reason</th>
-                    <th className="px-4 sm:px-6 py-3.5">Status</th>
-                    <th className="hidden lg:table-cell px-4 sm:px-6 py-3.5">Reviewed Date</th>
-                    <th className="hidden md:table-cell px-4 sm:px-6 py-3.5">Rejection / Review Notes</th>
-                    <th className="hidden sm:table-cell px-4 sm:px-6 py-3.5">Created Date</th>
+                    <th className="hidden sm:table-cell px-3 sm:px-6 py-3.5">Type</th>
+                    <th className="px-3 sm:px-6 py-3.5">Destination</th>
+                    <th className="hidden sm:table-cell px-3 sm:px-6 py-3.5">Reason</th>
+                    <th className="px-3 sm:px-6 py-3.5">Status</th>
+                    <th className="hidden lg:table-cell px-3 sm:px-6 py-3.5">Reviewed Date</th>
+                    <th className="hidden md:table-cell px-3 sm:px-6 py-3.5">Rejection / Review Notes</th>
+                    <th className="hidden sm:table-cell px-3 sm:px-6 py-3.5">Created Date</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
@@ -722,7 +723,7 @@ export default function MerchantBansPage() {
                   ) : (
                     filteredGlobalRequests.map((req) => (
                       <tr key={req.id} className="hover:bg-canvas/40 transition-colors">
-                        <td className="hidden sm:table-cell px-4 sm:px-6 py-4">
+                        <td className="hidden sm:table-cell px-3 sm:px-6 py-3.5 sm:py-4">
                           <span
                             className={cn(
                               "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium",
@@ -739,7 +740,7 @@ export default function MerchantBansPage() {
                             {req.destinationType === "UPI" ? "UPI VPA" : "Bank Account"}
                           </span>
                         </td>
-                        <td className="px-4 sm:px-6 py-4">
+                        <td className="px-3 sm:px-6 py-3.5 sm:py-4">
                           <div className="flex items-center gap-2">
                             <span
                               className={cn(
@@ -756,38 +757,44 @@ export default function MerchantBansPage() {
                                 <Landmark className="w-3.5 h-3.5" />
                               )}
                             </span>
-                            <span className="font-mono font-medium text-text-primary text-xs sm:text-sm">
-                              {req.maskedDestination}
-                            </span>
+                            <div className="min-w-0">
+                              <span className="font-mono font-medium text-text-primary text-xs sm:text-sm block truncate max-w-[140px] sm:max-w-none">
+                                {req.maskedDestination}
+                              </span>
+                              <span className="text-[11px] text-text-muted sm:hidden block truncate max-w-[140px]" title={req.reason}>
+                                {req.reason}
+                              </span>
+                            </div>
                           </div>
                         </td>
-                        <td className="px-4 sm:px-6 py-4 text-text-secondary max-w-xs truncate" title={req.reason}>
+                        <td className="hidden sm:table-cell px-3 sm:px-6 py-3.5 sm:py-4 text-text-secondary max-w-xs truncate" title={req.reason}>
                           {req.reason}
                         </td>
-                        <td className="px-4 sm:px-6 py-4">
+                        <td className="px-3 sm:px-6 py-3.5 sm:py-4">
                           {req.status === "PENDING" && (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/40">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/40 whitespace-nowrap">
                               <Clock className="w-3 h-3 text-amber-500" />
-                              Pending Review
+                              <span className="hidden sm:inline">Pending Review</span>
+                              <span className="sm:hidden">Pending</span>
                             </span>
                           )}
                           {req.status === "APPROVED" && (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/40">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/40 whitespace-nowrap">
                               <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                              Approved
+                              <span>Approved</span>
                             </span>
                           )}
                           {req.status === "REJECTED" && (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 border border-red-200/60 dark:border-red-800/40">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 border border-red-200/60 dark:border-red-800/40 whitespace-nowrap">
                               <XCircle className="w-3 h-3 text-red-500" />
-                              Rejected
+                              <span>Rejected</span>
                             </span>
                           )}
                         </td>
-                        <td className="hidden lg:table-cell px-4 sm:px-6 py-4 text-text-muted text-xs whitespace-nowrap">
+                        <td className="hidden lg:table-cell px-3 sm:px-6 py-3.5 sm:py-4 text-text-muted text-xs whitespace-nowrap">
                           {req.reviewedAt ? formatDateTimeIST(req.reviewedAt) : "—"}
                         </td>
-                        <td className="hidden md:table-cell px-4 sm:px-6 py-4 text-xs max-w-xs truncate">
+                        <td className="hidden md:table-cell px-3 sm:px-6 py-3.5 sm:py-4 text-xs max-w-xs truncate">
                           {req.status === "REJECTED" ? (
                             <span className="text-red-600 dark:text-red-400 font-medium" title={req.rejectionReason || "No details provided"}>
                               {req.rejectionReason || "Rejected by admin"}
@@ -800,7 +807,7 @@ export default function MerchantBansPage() {
                             <span className="text-text-muted">—</span>
                           )}
                         </td>
-                        <td className="hidden sm:table-cell px-4 sm:px-6 py-4 text-text-muted text-xs whitespace-nowrap">
+                        <td className="hidden sm:table-cell px-3 sm:px-6 py-3.5 sm:py-4 text-text-muted text-xs whitespace-nowrap">
                           {formatDateTimeIST(req.createdAt)}
                         </td>
                       </tr>
@@ -815,8 +822,8 @@ export default function MerchantBansPage() {
 
       {/* MODAL 1: Create Local Ban */}
       {isCreateLocalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
-          <div className="bg-surface border border-line rounded-2xl w-full max-w-lg shadow-xl overflow-hidden animate-in zoom-in-95 duration-200 my-auto flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[88vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[#0f172a]/40 backdrop-blur-[6px] animate-in fade-in duration-200 overflow-y-auto">
+          <div className="bg-surface border border-line rounded-[18px] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 my-auto flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[88vh]">
             <div className="flex items-center justify-between p-4 sm:p-6 border-b border-line shrink-0">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-red-500/10 text-red-500 rounded-lg shrink-0">
@@ -947,7 +954,7 @@ export default function MerchantBansPage() {
               </div>
 
               {/* Action buttons */}
-              <div className="sticky bottom-0 bg-surface/95 backdrop-blur-xs flex items-center justify-end gap-3 pt-3 border-t border-line shrink-0">
+              <div className="sticky bottom-0 -mx-4 sm:-mx-6 -mb-4 sm:-mb-6 px-4 sm:px-6 py-4 border-t border-line-soft bg-surface/95 backdrop-blur-sm flex items-center justify-end gap-3 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsCreateLocalOpen(false)}
@@ -972,8 +979,8 @@ export default function MerchantBansPage() {
 
       {/* MODAL 2: Create Global Ban Request */}
       {isCreateGlobalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
-          <div className="bg-surface border border-line rounded-2xl w-full max-w-lg shadow-xl overflow-hidden animate-in zoom-in-95 duration-200 my-auto flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[88vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[#0f172a]/40 backdrop-blur-[6px] animate-in fade-in duration-200 overflow-y-auto">
+          <div className="bg-surface border border-line rounded-[18px] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 my-auto flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[88vh]">
             <div className="flex items-center justify-between p-4 sm:p-6 border-b border-line shrink-0">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-amber-500/10 text-amber-600 rounded-lg shrink-0">
@@ -1121,7 +1128,7 @@ export default function MerchantBansPage() {
               </div>
 
               {/* Action buttons */}
-              <div className="sticky bottom-0 bg-surface/95 backdrop-blur-xs flex items-center justify-end gap-3 pt-3 border-t border-line shrink-0">
+              <div className="sticky bottom-0 -mx-4 sm:-mx-6 -mb-4 sm:-mb-6 px-4 sm:px-6 py-4 border-t border-line-soft bg-surface/95 backdrop-blur-sm flex items-center justify-end gap-3 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsCreateGlobalOpen(false)}
@@ -1146,8 +1153,8 @@ export default function MerchantBansPage() {
 
       {/* MODAL 3: Unban Confirmation */}
       {unbanTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
-          <div className="bg-surface border border-line rounded-2xl w-full max-w-md shadow-xl overflow-hidden animate-in zoom-in-95 duration-200 my-auto flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[88vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[#0f172a]/40 backdrop-blur-[6px] animate-in fade-in duration-200 overflow-y-auto">
+          <div className="bg-surface border border-line rounded-[18px] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 my-auto flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[88vh]">
             <div className="p-4 sm:p-6 border-b border-line flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-amber-500/10 text-amber-600 rounded-lg shrink-0">
@@ -1208,7 +1215,7 @@ export default function MerchantBansPage() {
                 Warning: Once unbanned, future payouts directed to this recipient will no longer be rejected by your local ban list.
               </div>
 
-              <div className="sticky bottom-0 bg-surface/95 backdrop-blur-xs flex items-center justify-end gap-3 pt-3 border-t border-line shrink-0">
+              <div className="sticky bottom-0 -mx-4 sm:-mx-6 -mb-4 sm:-mb-6 px-4 sm:px-6 py-4 border-t border-line-soft bg-surface/95 backdrop-blur-sm flex items-center justify-end gap-3 shrink-0">
                 <button
                   type="button"
                   onClick={() => {
