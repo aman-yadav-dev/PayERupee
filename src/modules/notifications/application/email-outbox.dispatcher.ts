@@ -12,12 +12,11 @@ import { processEmailOutbox } from "./email-outbox.processor";
  * it degrades gracefully. The original business transaction is not affected,
  * and the durable OutboxEvent remains PENDING to be swept by the scheduled recovery cron.
  */
-export function triggerImmediateEmailDispatch(): void {
+export async function triggerImmediateEmailDispatch(): Promise<void> {
   const workerId = `immediate-${randomUUID()}`;
-  
-  Promise.resolve()
-    .then(() => processEmailOutbox(workerId))
-    .catch((error) => {
-      logger.error(`[ImmediateDispatch] Unhandled error during immediate email dispatch:`, error);
-    });
+  try {
+    await processEmailOutbox(workerId, { skipLease: true });
+  } catch (error) {
+    logger.error(`[ImmediateDispatch] Unhandled error during immediate email dispatch:`, error);
+  }
 }

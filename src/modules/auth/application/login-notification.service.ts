@@ -77,7 +77,7 @@ export async function dispatchLoginNotification(session: { userId: string, id: s
         });
         
         const { triggerImmediateEmailDispatch } = await import("@/modules/notifications/application/email-outbox.dispatcher");
-        triggerImmediateEmailDispatch();
+        await triggerImmediateEmailDispatch();
       } catch (err: any) {
         if (err.code !== 'P2002') {
           logger.error("Failed to enqueue login email:", err);

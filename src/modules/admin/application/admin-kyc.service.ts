@@ -315,7 +315,7 @@ export async function approveKycApplication(adminUserId: string, applicationId: 
     return updatedCycle;
   });
 
-  triggerImmediateEmailDispatch();
+  await triggerImmediateEmailDispatch();
   return result;
 }
 
@@ -422,7 +422,7 @@ export async function rejectKycApplication(
     return updatedCycle;
   });
 
-  triggerImmediateEmailDispatch();
+  await triggerImmediateEmailDispatch();
   return result;
 }
 

@@ -89,7 +89,7 @@ export async function approveMerchantAccount(adminUserId: string, merchantProfil
     };
   });
 
-  triggerImmediateEmailDispatch();
+  await triggerImmediateEmailDispatch();
   return result;
 }
 

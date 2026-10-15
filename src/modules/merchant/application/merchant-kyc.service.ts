@@ -744,7 +744,7 @@ export async function submitKycApplication(merchantProfileId: string) {
     return updatedCycle;
   });
 
-  triggerImmediateEmailDispatch();
+  await triggerImmediateEmailDispatch();
   return result;
 }
 

@@ -24,14 +24,17 @@ function sanitizeEmailError(error: unknown): string {
  * Background worker to sweep and retry PENDING email OutboxEvents.
  * Safe to run concurrently across multiple processes due to SystemLease locking.
  */
-export async function processEmailOutbox(workerId: string) {
+export async function processEmailOutbox(workerId: string, options?: { skipLease?: boolean }) {
   const LEASE_RESOURCE = "EMAIL_SWEEPER";
+  let acquired = false;
   
-  // 1. Acquire Lease
-  const acquired = await acquireSystemLease(LEASE_RESOURCE, workerId, 300); // 5 minutes
-  if (!acquired) {
-    logger.info(`[${workerId}] Email outbox sweeper lease held by another worker. Skipping.`);
-    return;
+  if (!options?.skipLease) {
+    // 1. Acquire Lease (30 seconds TTL for fast recovery)
+    acquired = await acquireSystemLease(LEASE_RESOURCE, workerId, 30);
+    if (!acquired) {
+      logger.info(`[${workerId}] Email outbox sweeper lease held by another worker. Skipping.`);
+      return;
+    }
   }
 
   try {
@@ -145,7 +148,9 @@ export async function processEmailOutbox(workerId: string) {
       }
     }
   } finally {
-    // 3. Release Lease
-    await releaseSystemLease(LEASE_RESOURCE, workerId);
+    // 3. Release Lease if acquired
+    if (acquired) {
+      await releaseSystemLease(LEASE_RESOURCE, workerId);
+    }
   }
 }

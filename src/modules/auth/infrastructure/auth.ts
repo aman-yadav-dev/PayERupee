@@ -119,7 +119,7 @@ export const auth = betterAuth({
           });
 
           const { triggerImmediateEmailDispatch } = await import("@/modules/notifications/application/email-outbox.dispatcher");
-          triggerImmediateEmailDispatch();
+          await triggerImmediateEmailDispatch();
         }
       } catch (error) {
         logger.error(`[afterEmailVerification] Error creating outbox events for user ${user.id}:`, error);

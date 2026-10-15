@@ -101,7 +101,7 @@ export async function onboardMerchant(input: OnboardingInput) {
   });
 
   if (result.emailVerified) {
-    triggerImmediateEmailDispatch();
+    await triggerImmediateEmailDispatch();
   }
 
   return result;
