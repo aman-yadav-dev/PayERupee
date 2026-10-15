@@ -32,7 +32,7 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="dashboard-theme flex-1 flex flex-col min-w-0 min-h-[100dvh]">
+    <div className="dashboard-theme flex-1 flex flex-col min-w-0 w-full max-w-full min-h-[100dvh] overflow-x-clip">
       <AdminShell
         user={{
           id: user.id,

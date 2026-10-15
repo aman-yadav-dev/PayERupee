@@ -176,7 +176,10 @@ export class BanService {
       select: { id: true, role: true },
     });
 
-    if (!adminUser || adminUser.role !== UserRole.ADMIN) {
+    if (
+      !adminUser ||
+      (adminUser.role !== UserRole.ADMIN && adminUser.role !== UserRole.SUPER_ADMIN)
+    ) {
       throw new BanAuthorizationError("Admin privileges are required for this operation.");
     }
   }

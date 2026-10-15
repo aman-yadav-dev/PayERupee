@@ -16,7 +16,7 @@ export function AdminShell({
   const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <div className="flex-1 flex flex-col min-h-full min-w-0 bg-canvas">
+    <div className="flex-1 flex flex-col min-h-full min-w-0 w-full max-w-full bg-canvas overflow-x-clip">
       {/* Responsive Admin Sidebar */}
       <AdminSidebar
         open={mobileOpen}

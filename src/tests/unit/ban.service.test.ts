@@ -829,6 +829,14 @@ describe("BanService Unit Tests", () => {
       const bans = await BanService.listGlobalBans(adminUserId);
       expect(Array.isArray(requests)).toBe(true);
       expect(Array.isArray(bans)).toBe(true);
+
+      // Super Admin also succeeds
+      const superAdminUserId = "user_super_admin_888";
+      mockDb.users.push({ id: superAdminUserId, role: UserRole.SUPER_ADMIN });
+      const superRequests = await BanService.listGlobalBanRequests(superAdminUserId);
+      const superBans = await BanService.listGlobalBans(superAdminUserId);
+      expect(Array.isArray(superRequests)).toBe(true);
+      expect(Array.isArray(superBans)).toBe(true);
     });
   });
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Menu, ShieldCheck, ChevronDown, LogOut } from "lucide-react";
 import { AdminUserContext } from "./AdminSidebar";
 import { ThemeToggle } from "@/components/dashboard/ThemeToggle";
@@ -20,14 +20,18 @@ export function AdminTopbar({
   const router = useRouter();
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
-  const [currentDate] = useState(() =>
-    new Date().toLocaleDateString("en-US", {
-      weekday: "short",
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    })
-  );
+  const [currentDate, setCurrentDate] = useState("");
+
+  useEffect(() => {
+    setCurrentDate(
+      new Date().toLocaleDateString("en-US", {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    );
+  }, []);
 
   useClickOutside(profileRef, () => setProfileOpen(false));
 
@@ -79,8 +83,8 @@ export function AdminTopbar({
               {getSectionTitle()}
             </h1>
           </div>
-          <p className="hidden lg:block text-[12px] text-text-muted -mt-0.5 truncate">
-            {currentDate} &middot; Administrative Console
+          <p suppressHydrationWarning className="hidden lg:block text-[12px] text-text-muted -mt-0.5 truncate">
+            {currentDate ? `${currentDate} · ` : ""}Administrative Console
           </p>
         </div>
       </div>

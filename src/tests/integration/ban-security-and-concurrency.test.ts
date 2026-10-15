@@ -222,6 +222,23 @@ describe("Ban Security, Tenant Isolation, and Concurrency Integration Test", () 
         BanService.listGlobalBanRequests("")
       ).rejects.toThrow(BanAuthorizationError);
     });
+
+    it("allows SUPER_ADMIN role to perform administrative ban operations", async () => {
+      const superAdminUser = await db.user.create({
+        data: {
+          id: "super_admin_test_" + uuidv4(),
+          email: "superadmin_test_" + uuidv4() + "@test.com",
+          name: "Super Admin Tester",
+          role: UserRole.SUPER_ADMIN,
+        },
+      });
+
+      const bans = await BanService.listGlobalBans(superAdminUser.id);
+      expect(Array.isArray(bans)).toBe(true);
+
+      const requests = await BanService.listGlobalBanRequests(superAdminUser.id);
+      expect(Array.isArray(requests)).toBe(true);
+    });
   });
 
   describe("3. Zero Leaks", () => {

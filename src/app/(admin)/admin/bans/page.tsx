@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   ShieldAlert,
   ShieldCheck,
@@ -14,6 +15,7 @@ import {
   Trash2,
   Search,
   CheckCircle2,
+  ArrowLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDateTimeIST } from "@/lib/date";
@@ -63,6 +65,7 @@ export interface AdminGlobalBanItem {
 
 export default function AdminBansPage() {
   const [activeTab, setActiveTab] = useState<"pending" | "active">("pending");
+  const [accessDenied, setAccessDenied] = useState<boolean>(false);
 
   // Requests state
   const [requests, setRequests] = useState<AdminBanRequestItem[]>([]);
@@ -92,12 +95,19 @@ export default function AdminBansPage() {
     setLoadingRequests(true);
     try {
       const res = await fetch("/api/v1/admin/bans/requests");
+      if (res.status === 403) {
+        setAccessDenied(true);
+        return;
+      }
       const json = await res.json();
       if (res.ok && json.success) {
+        setAccessDenied(false);
         setRequests(json.data || []);
       } else if (Array.isArray(json)) {
+        setAccessDenied(false);
         setRequests(json);
       } else if (json.data && Array.isArray(json.data)) {
+        setAccessDenied(false);
         setRequests(json.data);
       } else {
         toast.error(json.error || "Failed to fetch ban requests");
@@ -115,12 +125,19 @@ export default function AdminBansPage() {
     setLoadingBans(true);
     try {
       const res = await fetch("/api/v1/admin/bans");
+      if (res.status === 403) {
+        setAccessDenied(true);
+        return;
+      }
       const json = await res.json();
       if (res.ok && json.success) {
+        setAccessDenied(false);
         setGlobalBans(json.data || []);
       } else if (Array.isArray(json)) {
+        setAccessDenied(false);
         setGlobalBans(json);
       } else if (json.data && Array.isArray(json.data)) {
+        setAccessDenied(false);
         setGlobalBans(json.data);
       } else {
         toast.error(json.error || "Failed to fetch global bans");
@@ -138,12 +155,24 @@ export default function AdminBansPage() {
     const init = async () => {
       try {
         const [reqRes, banRes] = await Promise.all([
-          fetch("/api/v1/admin/bans/requests").then(r => r.json()).catch(() => null),
-          fetch("/api/v1/admin/bans").then(r => r.json()).catch(() => null),
+          fetch("/api/v1/admin/bans/requests"),
+          fetch("/api/v1/admin/bans"),
         ]);
         if (ignore) return;
-        if (reqRes?.success) setRequests(reqRes.data || []);
-        if (banRes?.success) setGlobalBans(banRes.data || []);
+        if (reqRes.status === 403 || banRes.status === 403) {
+          setAccessDenied(true);
+          return;
+        }
+        const reqJson = await reqRes.json().catch(() => null);
+        const banJson = await banRes.json().catch(() => null);
+        if (reqJson?.success) {
+          setAccessDenied(false);
+          setRequests(reqJson.data || []);
+        }
+        if (banJson?.success) {
+          setAccessDenied(false);
+          setGlobalBans(banJson.data || []);
+        }
       } finally {
         if (!ignore) {
           setLoadingRequests(false);
@@ -310,8 +339,49 @@ export default function AdminBansPage() {
 
   const isCurrentLoading = activeTab === "pending" ? loadingRequests : loadingBans;
 
+  if (accessDenied) {
+    return (
+      <div className="max-w-2xl mx-auto py-12 px-4 sm:px-6">
+        <div className="rounded-2xl border border-line bg-surface p-8 sm:p-12 text-center shadow-[var(--shadow-card)] space-y-6">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 shadow-xs">
+            <ShieldAlert className="h-8 w-8" />
+          </div>
+
+          <div className="space-y-2">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-text-primary font-display">
+              Administrator Privileges Required
+            </h1>
+            <p className="text-xs sm:text-sm text-text-muted leading-relaxed max-w-md mx-auto">
+              Destination ban review, approval, and platform-wide moderation operations are restricted to verified platform Administrators.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-line bg-canvas p-4 text-left text-xs text-text-secondary space-y-1">
+            <div className="flex items-center gap-2 font-medium text-text-primary">
+              <span className="h-2 w-2 rounded-full bg-amber-500" />
+              <span>Restricted Governance Domain</span>
+            </div>
+            <p className="text-[11px] text-text-muted leading-normal">
+              Your account does not have sufficient administrative privileges to view or manage global destination bans.
+            </p>
+          </div>
+
+          <div className="pt-2 flex justify-center">
+            <Link
+              href="/admin/dashboard"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-purple-600 text-white hover:bg-purple-700 text-xs font-semibold transition-colors shadow-sm press-feedback"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>Return to Dashboard</span>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className="w-full max-w-7xl mx-auto space-y-6 overflow-x-clip">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-line">
         <div>
