@@ -408,19 +408,19 @@ export default function MerchantBansPage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8">
+    <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8 overflow-x-clip">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-red-500/10 text-red-500 dark:bg-red-500/20 shrink-0">
               <ShieldAlert className="w-6 h-6" />
             </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-display font-semibold text-text-primary">
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-2xl font-display font-semibold text-text-primary truncate sm:whitespace-normal">
                 Destination Ban Management
               </h1>
-              <p className="text-text-muted text-xs sm:text-sm mt-0.5">
+              <p className="text-text-muted text-xs sm:text-sm mt-0.5 line-clamp-2 sm:line-clamp-none">
                 Block suspicious payout destinations and submit platform-wide global ban requests.
               </p>
             </div>
@@ -463,11 +463,11 @@ export default function MerchantBansPage() {
       </div>
 
       {/* Tabs navigation */}
-      <div className="flex border-b border-line gap-6">
+      <div className="flex border-b border-line gap-4 sm:gap-6 overflow-x-auto scroll-thin -mx-4 px-4 sm:mx-0 sm:px-0">
         <button
           onClick={() => setActiveTab("local")}
           className={cn(
-            "pb-3 text-sm font-medium transition-colors relative flex items-center gap-2",
+            "pb-3 text-sm font-medium transition-colors relative flex items-center gap-2 shrink-0 whitespace-nowrap",
             activeTab === "local"
               ? "text-primary border-b-2 border-primary"
               : "text-text-muted hover:text-text-primary"
@@ -489,7 +489,7 @@ export default function MerchantBansPage() {
         <button
           onClick={() => setActiveTab("global")}
           className={cn(
-            "pb-3 text-sm font-medium transition-colors relative flex items-center gap-2",
+            "pb-3 text-sm font-medium transition-colors relative flex items-center gap-2 shrink-0 whitespace-nowrap",
             activeTab === "global"
               ? "text-primary border-b-2 border-primary"
               : "text-text-muted hover:text-text-primary"
@@ -535,7 +535,7 @@ export default function MerchantBansPage() {
                   <tr>
                     <th className="hidden sm:table-cell px-3 sm:px-6 py-3.5">Type</th>
                     <th className="px-3 sm:px-6 py-3.5">Destination</th>
-                    <th className="px-3 sm:px-6 py-3.5">Reason</th>
+                    <th className="hidden sm:table-cell px-3 sm:px-6 py-3.5">Reason</th>
                     <th className="px-3 sm:px-6 py-3.5">Status</th>
                     <th className="hidden sm:table-cell px-3 sm:px-6 py-3.5">Created Date</th>
                     <th className="px-3 sm:px-6 py-3.5 text-right">Actions</th>
@@ -604,12 +604,17 @@ export default function MerchantBansPage() {
                                   <Landmark className="w-3.5 h-3.5" />
                                 )}
                               </span>
-                              <span className="font-mono font-medium text-text-primary text-xs sm:text-sm truncate max-w-[130px] sm:max-w-none block">
-                                {ban.maskedDestination}
-                              </span>
+                              <div className="min-w-0">
+                                <span className="font-mono font-medium text-text-primary text-xs sm:text-sm block truncate max-w-[140px] sm:max-w-none">
+                                  {ban.maskedDestination}
+                                </span>
+                                <span className="text-[11px] text-text-muted sm:hidden block truncate max-w-[140px]" title={ban.reason}>
+                                  Reason: {ban.reason}
+                                </span>
+                              </div>
                             </div>
                           </td>
-                          <td className="px-3 sm:px-6 py-3.5 sm:py-4 text-text-secondary max-w-[120px] sm:max-w-xs truncate" title={ban.reason}>
+                          <td className="hidden sm:table-cell px-3 sm:px-6 py-3.5 sm:py-4 text-text-secondary max-w-[120px] sm:max-w-xs truncate" title={ban.reason}>
                             {ban.reason}
                           </td>
                           <td className="px-3 sm:px-6 py-3.5 sm:py-4">

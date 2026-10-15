@@ -10,7 +10,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <div className="flex-1 flex flex-col min-h-full min-w-0 bg-canvas">
+    <div className="flex-1 flex flex-col min-h-full min-w-0 w-full max-w-full bg-canvas overflow-x-clip">
       <Sidebar
         open={mobileOpen}
         onClose={() => setMobileOpen(false)}
@@ -26,7 +26,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         />
       )}
 
-      <div className={cn("flex-1 flex flex-col min-w-0 transition-[padding] duration-200", "md:pl-[76px]", collapsed ? "lg:pl-[76px]" : "lg:pl-64")}>
+      <div className={cn("flex-1 flex flex-col min-w-0 w-full max-w-full overflow-x-clip transition-[padding] duration-200", "md:pl-[76px]", collapsed ? "lg:pl-[76px]" : "lg:pl-64")}>
         <Topbar onMenuClick={() => setMobileOpen(true)} />
         {children}
       </div>

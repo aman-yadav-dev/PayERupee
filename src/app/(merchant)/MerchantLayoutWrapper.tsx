@@ -21,7 +21,7 @@ export function MerchantLayoutWrapper({
     // We wrap it in the theme scope so globals don't leak.
     // Use flex layout to ensure the canvas background stretches seamlessly
     return (
-      <div className="dashboard-theme flex-1 flex flex-col min-w-0 min-h-[100dvh]">
+      <div className="dashboard-theme flex-1 flex flex-col min-w-0 w-full max-w-full min-h-[100dvh] overflow-x-clip">
         <DashboardShell>
           {children}
         </DashboardShell>

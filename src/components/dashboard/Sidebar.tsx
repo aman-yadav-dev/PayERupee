@@ -52,7 +52,7 @@ export function Sidebar({
         "md:translate-x-0 md:shadow-none",
         open
           ? "translate-x-0 shadow-[12px_0_32px_-8px_rgba(8,15,30,0.28)]"
-          : "-translate-x-full"
+          : "-translate-x-full pointer-events-none md:pointer-events-auto"
       )}
     >
       {/* Laptop+ collapse/expand handle, floats on the sidebar's edge */}

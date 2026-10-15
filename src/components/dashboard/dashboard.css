@@ -150,6 +150,8 @@
   color: var(--color-text-primary);
   font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
   transition: background-color 0.25s ease, color 0.25s ease;
+  overflow-x: clip;
+  max-width: 100vw;
 }
 
 /* Every surface that carries a theme color gets a smooth crossfade when
