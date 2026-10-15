@@ -8,6 +8,9 @@ export const logger = {
   info: (message: string, meta?: any) => {
     console.log(`[INFO] ${message}`, sanitizeMeta(meta));
   },
+  warn: (message: string, meta?: any) => {
+    console.warn(`[WARN] ${message}`, sanitizeMeta(meta));
+  },
   error: (message: string, error?: any, meta?: any) => {
     console.error(`[ERROR] ${message}`, sanitizeMeta(error), sanitizeMeta(meta));
   },

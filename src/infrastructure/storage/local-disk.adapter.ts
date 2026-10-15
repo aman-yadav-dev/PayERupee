@@ -64,7 +64,7 @@ export class LocalDiskStorageAdapter implements IStorageProvider {
       await fs.writeFile(fullPath, data);
     } catch (error: any) {
       if (error?.code === "EROFS" && !this.baseDir.startsWith(os.tmpdir())) {
-        logger.warn("Read-only filesystem detected, switching storage to os.tmpdir()");
+        logger.info("Read-only filesystem detected, switching storage to os.tmpdir()");
         this.baseDir = path.join(os.tmpdir(), "payerupee_storage");
         try {
           const fallbackPath = this.resolveKey(key);
