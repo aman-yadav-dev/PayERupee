@@ -20,28 +20,56 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ success: false, error: "Transaction not found" }, { status: 404 });
     }
 
+    let activePayout = payout;
+    if (activePayout.status === "PROCESSING") {
+      try {
+        const { getPayoutProvider } = await import("@/modules/provider/adapters/provider.factory");
+        const { handlePayoutSuccess, failPayout } = await import("@/modules/payout/domain/payout.service");
+        const provider = getPayoutProvider(activePayout.environment as "TEST" | "LIVE");
+        const statusRes = await provider.status(activePayout.id, activePayout.providerReference ?? undefined);
+
+        if (statusRes.outcome === "SUCCESS") {
+          await handlePayoutSuccess(activePayout.id, activePayout.merchantProfileId, statusRes.providerReference);
+          const updated = await db.payout.findUnique({
+            where: { id },
+            include: { ledgerEntries: true }
+          });
+          if (updated) activePayout = updated;
+        } else if (statusRes.outcome === "REJECTED") {
+          await failPayout(activePayout.id, activePayout.merchantProfileId, statusRes.failureReason || "Provider reported failure", statusRes.providerFailureDetails);
+          const updated = await db.payout.findUnique({
+            where: { id },
+            include: { ledgerEntries: true }
+          });
+          if (updated) activePayout = updated;
+        }
+      } catch (err) {
+        logger.warn(`On-demand payout reconciliation skipped for ${id}:`, err);
+      }
+    }
+
     const mappedTransaction = {
-      id: payout.id,
+      id: activePayout.id,
       type: "PAYOUT",
-      reference: payout.merchantReference || payout.id,
-      amount: payout.amount.toString(),
-      fee: payout.fee.toString(),
-      tax: payout.tax.toString(),
-      totalDebitAmount: payout.totalDebitAmount.toString(),
-      status: payout.status,
-      createdAt: payout.createdAt.toISOString(),
-      updatedAt: payout.updatedAt.toISOString(),
-      paymentMode: payout.paymentMode,
+      reference: activePayout.merchantReference || activePayout.id,
+      amount: activePayout.amount.toString(),
+      fee: activePayout.fee.toString(),
+      tax: activePayout.tax.toString(),
+      totalDebitAmount: activePayout.totalDebitAmount.toString(),
+      status: activePayout.status,
+      createdAt: activePayout.createdAt.toISOString(),
+      updatedAt: activePayout.updatedAt.toISOString(),
+      paymentMode: activePayout.paymentMode,
       destination: {
-        accountName: payout.accountHolderName,
-        accountNumber: maskDestination(payout.accountNumber),
-        ifscCode: payout.ifscCode,
-        vpa: payout.vpa,
-        phone: payout.beneficiaryPhone
+        accountName: activePayout.accountHolderName,
+        accountNumber: maskDestination(activePayout.accountNumber),
+        ifscCode: activePayout.ifscCode,
+        vpa: activePayout.vpa,
+        phone: activePayout.beneficiaryPhone
       },
-      failureReason: payout.failureReason,
-      provider: payout.provider,
-      ledgerEntries: payout.ledgerEntries.map(le => ({
+      failureReason: activePayout.failureReason,
+      provider: activePayout.provider,
+      ledgerEntries: activePayout.ledgerEntries.map(le => ({
         id: le.id,
         amount: le.amount.toString(),
         purpose: le.purpose,

@@ -181,6 +181,7 @@ const navLinks = [
   { label: "Services", href: "#services" },
   { label: "How it Works", href: "#how-it-works" },
   { label: "Roadmap", href: "#roadmap" },
+  { label: "Docs", href: "/docs" },
 ];
 
 const features = [
@@ -298,8 +299,8 @@ const networks = [
 const footerLinks = {
   Product: [
     { label: "Payout Gateway", href: "#features" },
-    { label: "Documentation", href: "/register" },
-    { label: "API Reference", href: "/register" },
+    { label: "Documentation", href: "/docs" },
+    { label: "API Reference", href: "/docs#api-reference" },
     { label: "Pricing", href: "/register" },
   ],
   Company: [
@@ -488,10 +489,13 @@ export default function Page() {
                 <span className="relative">Create Free Account</span>
                 <ArrowRight className="relative h-4 w-4 transition-transform group-hover:translate-x-1" />
               </Link>
-              <button className="flex items-center justify-center gap-2 rounded-full border border-slate-300/80 bg-white/60 px-7 py-3.5 text-sm font-semibold text-slate-700 backdrop-blur-sm transition-all hover:border-slate-400 hover:bg-white hover:shadow-md">
+              <Link
+                href="/docs"
+                className="flex items-center justify-center gap-2 rounded-full border border-slate-300/80 bg-white/60 px-7 py-3.5 text-sm font-semibold text-slate-700 backdrop-blur-sm transition-all hover:border-slate-400 hover:bg-white hover:shadow-md"
+              >
                 <Code2 className="h-4 w-4" />
                 View Documentation
-              </button>
+              </Link>
             </motion.div>
 
             <motion.div

@@ -29,6 +29,14 @@ export class InMemoryPayoutProvider implements IPayoutProvider {
 
     switch (InMemoryPayoutProvider.nextAction) {
       case "QUEUED":
+        // In sandbox development and production environments outside automated Vitest suites,
+        // test payouts resolve to SUCCESS immediately for instant demo feedback.
+        if (process.env.VITEST !== "true") {
+          return {
+            outcome: "SUCCESS",
+            providerReference: `MOCK_REF_${payoutId}`,
+          };
+        }
         return {
           outcome: "QUEUED",
           providerReference: `MOCK_REF_${payoutId}`,
@@ -81,7 +89,7 @@ export class InMemoryPayoutProvider implements IPayoutProvider {
         
         if (payout) {
           const ageMs = Date.now() - payout.createdAt.getTime();
-          if (ageMs >= 5000) { // 5 second simulated delay
+          if (ageMs >= 5000 || process.env.VITEST !== "true") {
             outcome = "SUCCESS";
           }
         }
