@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireMerchantContext } from "@/modules/auth/application/session-auth.service";
+import { logger } from "@/infrastructure/logger/logger";
 import { 
   uploadKycDocument, 
   listKycDocuments, 
   ApplicationNotFoundError, 
   KycStateError, 
-  KycValidationError 
+  KycValidationError,
+  MerchantTypeMissingError
 } from "@/modules/merchant/application/merchant-kyc.service";
 
 export async function POST(req: NextRequest) {
@@ -43,6 +45,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, document }, { status: 201 });
   } catch (error: any) {
+    logger.error("KYC document upload error:", error);
     if (error instanceof ApplicationNotFoundError || error.name === "FormNotFoundError") {
       return NextResponse.json({ success: false, error: error.message }, { status: 404 });
     }
@@ -51,6 +54,9 @@ export async function POST(req: NextRequest) {
     }
     if (error.name === "InvalidMagicBytesError") {
       return NextResponse.json({ success: false, error: error.message }, { status: 415 });
+    }
+    if (error instanceof MerchantTypeMissingError || error.name === "MerchantTypeMissingError") {
+      return NextResponse.json({ success: false, error: error.message }, { status: 400 });
     }
     if (error instanceof KycValidationError) {
       // If the domain throws a size error, map it to 413
@@ -66,7 +72,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
     }
 
-    return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
+    return NextResponse.json({ success: false, error: error?.message || "Internal Server Error" }, { status: 500 });
   }
 }
 
