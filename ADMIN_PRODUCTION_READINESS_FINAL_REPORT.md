@@ -131,7 +131,7 @@ During the project lifecycle, team members noted the coexistence of multiple dat
 #### 1. `payerupee_dev` (Port 5432, Container `payerupee-test-db`)
 * **Role:** Primary active local development database.
 * **Configuration:** Defined in `.env` (`DATABASE_URL="postgresql://postgres:postgres@localhost:5432/payerupee_dev"`).
-* **Usage:** Used by Next.js (`npm run dev`) at `http://localhost:3000`. It contains the seeded `superadmin@payerupee.com` account, sample merchants, and persistent local records.
+* **Usage:** Used by Next.js (`npm run dev`) at `http://localhost:3000`. It contains the seeded `superadmin@payerupee.in` account, sample merchants, and persistent local records.
 * **Safety Rule:** Never run destructive commands or test wipe scripts against this database.
 
 #### 2. Ephemeral `test_db_<hex>` (Port 5432, Container `payerupee-test-db`)

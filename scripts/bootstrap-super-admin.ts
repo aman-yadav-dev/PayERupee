@@ -6,7 +6,7 @@ import { UserRole } from "@prisma/client";
 
 async function bootstrapSuperAdmin() {
   const isProduction = process.env.NODE_ENV === "production";
-  const email = process.env.SUPER_ADMIN_EMAIL || "superadmin@payerupee.com";
+  const email = process.env.SUPER_ADMIN_EMAIL || "superadmin@payerupee.in";
   const password = process.env.SUPER_ADMIN_PASSWORD;
 
   if (isProduction && (!password || password === "SuperAdmin@PayERupee2026!" || password.length < 12)) {

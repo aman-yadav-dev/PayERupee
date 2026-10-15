@@ -189,7 +189,7 @@ Target application verified live on `http://localhost:3000` using headless Chrom
   - Mobile Base: `step5_settings_mobile.png` (69.3 KB)
 
 #### 6. `/admin/admins` (Super Admin Governance)
-- **Roster & Controls:** Logged in as `superadmin@payerupee.com` (`SUPER_ADMIN`). Roster displayed 3 administrators (System Super Administrator, Aman, QA Ordinary Admin).
+- **Roster & Controls:** Logged in as `superadmin@payerupee.in` (`SUPER_ADMIN`). Roster displayed 3 administrators (System Super Administrator, Aman, QA Ordinary Admin).
 - **Search & Filters:** Real-time search filter and role tabs (`ALL`, `SUPER_ADMIN`, `ADMIN`) verified.
 - **Provisioning Modal:** "Add Administrator" button opened `<AdminModal title="Provision New Administrator">`. Form fields (name, email, role toggle, password) and footer buttons ("Cancel", "Confirm & Provision") verified with independent focus and Escape dismissal.
 - **Screenshots:**
@@ -198,7 +198,7 @@ Target application verified live on `http://localhost:3000` using headless Chrom
   - Mobile Base: `step6_admins_mobile.png` (52.8 KB)
 
 #### 7. Server-Side RBAC Access Denial (Ordinary Administrator)
-- **Authentication:** Authenticated as `qa.admin@payerupee.com` (`ADMIN`).
+- **Authentication:** Authenticated as `qa.admin@payerupee.in` (`ADMIN`).
 - **Server-Side Enforcement:** Attempted `GET /admin/admins`. Browser network intercept verified server API `GET /api/v1/admin/admins` returned **HTTP 403 Forbidden**.
 - **User Interface:** UI rendered authentic PayERupee design system Access Denied card:
   - Title: *"Super Administrator Privileges Required"*

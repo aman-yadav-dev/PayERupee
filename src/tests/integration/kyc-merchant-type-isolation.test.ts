@@ -15,7 +15,7 @@ describe("KYC Merchant-Type Draft Isolation", () => {
     formVersionId = fv!.id;
 
     const user = await db.user.create({
-      data: { id: "isolation_user", email: "isolation-test@payerupee.com", name: "Isolation User" }
+      data: { id: "isolation_user", email: "isolation-test@payerupee.in", name: "Isolation User" }
     });
     const profile = await db.merchantProfile.create({
       data: { userId: user.id, merchantType: "INDIVIDUAL" }
@@ -29,7 +29,7 @@ describe("KYC Merchant-Type Draft Isolation", () => {
     await db.kycSubmissionCycle.deleteMany({ where: { application: { merchantProfileId: merchantId } } });
     await db.kycApplication.deleteMany({ where: { merchantProfileId: merchantId } });
     await db.merchantProfile.deleteMany({ where: { id: merchantId } });
-    await db.user.deleteMany({ where: { email: "isolation-test@payerupee.com" } });
+    await db.user.deleteMany({ where: { email: "isolation-test@payerupee.in" } });
   });
 
   it("1. Individual -> Company -> Individual restores answers and documents", async () => {

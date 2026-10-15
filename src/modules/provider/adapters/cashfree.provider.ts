@@ -47,7 +47,7 @@ export class CashfreePayoutProvider implements IPayoutProvider {
         body: JSON.stringify({
           beneId,
           name: accountHolderName || "Unknown",
-          email: "merchant@payerupee.com",
+          email: "merchant@payerupee.in",
           phone: beneficiaryPhone || "9999999999",
           bankAccount: accountNumber,
           ifsc: ifscCode,

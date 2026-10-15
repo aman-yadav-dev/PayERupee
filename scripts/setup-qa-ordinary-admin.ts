@@ -5,7 +5,7 @@ import { db } from "@/infrastructure/database/db";
 import { UserRole } from "@prisma/client";
 
 async function main() {
-  const email = "qa.admin@payerupee.com";
+  const email = "qa.admin@payerupee.in";
   const password = "AdminPassword123!";
   const name = "QA Ordinary Admin";
 

@@ -20,7 +20,7 @@ describe("Production Secret Quality Validation & Reconciliation", () => {
     DATABASE_URL: "postgresql://user:pass@localhost:5432/db",
     DIRECT_URL: "postgresql://user:pass@localhost:5432/db",
     BETTER_AUTH_SECRET: "secure_better_auth_random_secret_at_least_16_chars",
-    BETTER_AUTH_URL: "https://payerupee.com",
+    BETTER_AUTH_URL: "https://payerupee.in",
     REDIS_URL: "redis://localhost:6379",
     NODE_ENV: "production" as const,
     BAN_HASH_SECRET: getValidRandomKey(),

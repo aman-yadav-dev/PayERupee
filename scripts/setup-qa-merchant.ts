@@ -5,7 +5,7 @@ import { db } from "@/infrastructure/database/db";
 import { UserRole, AccountStatus, KycStatus, PayoutStatus, PaymentMode, PayoutProvider, LedgerAccountType, KycDataType } from "@prisma/client";
 
 async function main() {
-  const email = "qa.merchant@payerupee.com";
+  const email = "qa.merchant@payerupee.in";
   const password = "MerchantPassword123!";
   const name = "QA Merchant";
 

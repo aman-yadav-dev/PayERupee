@@ -11,7 +11,7 @@ async function main() {
     console.log(`Already have ${merchantCount} merchant profiles.`);
   } else {
     for (let i = 1; i <= 2; i++) {
-      const email = `merchant${i}.qa@payerupee.com`;
+      const email = `merchant${i}.qa@payerupee.in`;
       const name = `Acme Retail Solutions ${i}`;
       
       const user = await db.user.upsert({

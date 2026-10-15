@@ -152,8 +152,8 @@ export default function PrivacyPolicyPage() {
             <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-50 mb-2">Data Protection Officer</h2>
             <p className="text-[13.5px] text-zinc-500 dark:text-zinc-400">
               For any privacy concerns, data deletion requests, or compliance inquiries, please contact our Data Protection Officer at{" "}
-              <a href="mailto:privacy@payerupee.com" className="font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
-                privacy@payerupee.com
+              <a href="mailto:privacy@payerupee.in" className="font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
+                privacy@payerupee.in
               </a>.
             </p>
           </section>

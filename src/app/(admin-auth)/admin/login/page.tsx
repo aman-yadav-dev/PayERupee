@@ -117,7 +117,7 @@ function AdminLoginForm() {
             icon={Mail}
             type="email"
             autoComplete="email"
-            placeholder="admin@payerupee.com"
+            placeholder="admin@payerupee.in"
             name="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}

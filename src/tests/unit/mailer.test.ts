@@ -45,7 +45,7 @@ describe("Mailer Abstraction and Templates", () => {
     it("1. & 2. & 3. Configures Hostinger SMTP correctly", () => {
       (env as any).SMTP_HOST = "smtp.hostinger.com";
       (env as any).SMTP_PORT = 465;
-      (env as any).SMTP_USER = "hello@payerupee.com";
+      (env as any).SMTP_USER = "hello@payerupee.in";
       (env as any).SMTP_PASSWORD = "secret_password";
 
       const transporter = getTransporter();
@@ -54,7 +54,7 @@ describe("Mailer Abstraction and Templates", () => {
         port: 465,
         secure: true,
         auth: {
-          user: "hello@payerupee.com",
+          user: "hello@payerupee.in",
           pass: "secret_password",
         },
       });
@@ -123,9 +123,9 @@ describe("Mailer Abstraction and Templates", () => {
       (env as any).SMTP_ENABLED = true;
       (env as any).SMTP_HOST = "smtp.hostinger.com";
       (env as any).SMTP_PORT = 465;
-      (env as any).SMTP_USER = "hello@payerupee.com";
+      (env as any).SMTP_USER = "hello@payerupee.in";
       (env as any).SMTP_PASSWORD = "secret_password";
-      (env as any).MAIL_FROM = '"PayERupee Team" <hello@payerupee.com>';
+      (env as any).MAIL_FROM = '"PayERupee Team" <hello@payerupee.in>';
 
       await sendEmail({ to: "a@b.com", subject: "Test Subject", html: "<p>H</p>", text: "T" });
 
@@ -133,7 +133,7 @@ describe("Mailer Abstraction and Templates", () => {
       const mailArgs = sendMailMock.mock.calls[0][0];
 
       // 4. Correct sender
-      expect(mailArgs.from).toBe('"PayERupee Team" <hello@payerupee.com>');
+      expect(mailArgs.from).toBe('"PayERupee Team" <hello@payerupee.in>');
       // 5. Correct recipient
       expect(mailArgs.to).toBe("a@b.com");
       // 6. Correct subject

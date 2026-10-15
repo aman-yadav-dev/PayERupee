@@ -632,7 +632,7 @@ export default function AdminManagementPage() {
               required
               value={createForm.email}
               onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
-              placeholder="e.g. rahul@payerupee.com"
+              placeholder="e.g. rahul@payerupee.in"
               className="w-full px-3.5 py-2.5 bg-canvas border border-line rounded-xl text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-purple-500/20"
             />
           </div>

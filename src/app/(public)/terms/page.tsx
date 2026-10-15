@@ -158,8 +158,8 @@ export default function TermsOfServicePage() {
             <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-50 mb-2">Questions & Support</h2>
             <p className="text-[13.5px] text-zinc-500 dark:text-zinc-400">
               For any legal or compliance queries, please reach out to our team at{" "}
-              <a href="mailto:compliance@payerupee.com" className="font-semibold text-indigo-600 hover:underline">
-                compliance@payerupee.com
+              <a href="mailto:compliance@payerupee.in" className="font-semibold text-indigo-600 hover:underline">
+                compliance@payerupee.in
               </a>.
             </p>
           </section>

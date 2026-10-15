@@ -93,7 +93,7 @@ export function getEmailShell(content: string): string {
         <table width="100%" max-width="600" border="0" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;">
           <tr>
             <td align="center" style="padding-top:40px;font-size:13px;color:#9ca3af;line-height:1.5;">
-              <p style="margin:0 0 10px 0;">Need help? Contact our support team at <a href="mailto:support@payerupee.com" style="color:#4f46e5;text-decoration:none;">support@payerupee.com</a></p>
+              <p style="margin:0 0 10px 0;">Need help? Contact our support team at <a href="mailto:support@payerupee.in" style="color:#4f46e5;text-decoration:none;">support@payerupee.in</a></p>
               <p style="margin:0;">&copy; 2026 PayERupee Solutions. All rights reserved.</p>
             </td>
           </tr>
@@ -107,7 +107,7 @@ export function getEmailShell(content: string): string {
 }
 
 export function getTextShell(content: string): string {
-  return `PayERupee Solutions\n=======================================================\n\n${content}\n\n---\nNeed help? Contact our support team at support@payerupee.com\n(c) 2026 PayERupee Solutions. All rights reserved.`;
+  return `PayERupee Solutions\n=======================================================\n\n${content}\n\n---\nNeed help? Contact our support team at support@payerupee.in\n(c) 2026 PayERupee Solutions. All rights reserved.`;
 }
 
 export async function sendEmail(options: SendEmailOptions) {

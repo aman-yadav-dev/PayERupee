@@ -296,14 +296,23 @@ const networks = [
 ];
 
 const footerLinks = {
-  Product: ["Payout Gateway", "Documentation", "API Reference", "Pricing"],
-  Company: [
-    "About Us",
-    "Software Development",
-    "Business Enablement",
-    "Careers",
+  Product: [
+    { label: "Payout Gateway", href: "#features" },
+    { label: "Documentation", href: "/register" },
+    { label: "API Reference", href: "/register" },
+    { label: "Pricing", href: "/register" },
   ],
-  Legal: ["Terms of Service", "Privacy Policy", "Compliance"],
+  Company: [
+    { label: "About Us", href: "#services" },
+    { label: "Software Development", href: "#services" },
+    { label: "Business Enablement", href: "#services" },
+    { label: "Careers", href: "mailto:careers@payerupee.in" },
+  ],
+  Legal: [
+    { label: "Terms of Service", href: "/terms" },
+    { label: "Privacy Policy", href: "/privacy" },
+    { label: "Compliance", href: "/terms" },
+  ],
 };
 
 export default function Page() {
@@ -965,9 +974,12 @@ export default function Page() {
                 <span className="relative">Create Free Account</span>
                 <ArrowRight className="relative h-4 w-4" />
               </Link>
-              <button className="rounded-full border border-white/20 bg-white/5 px-7 py-3.5 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:border-white/40 hover:bg-white/10">
+              <a
+                href="mailto:support@payerupee.in?subject=PayERupee%20Sales%20%26%20Enterprise%20Inquiry"
+                className="inline-flex items-center justify-center rounded-full border border-white/20 bg-white/5 px-7 py-3.5 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:border-white/40 hover:bg-white/10"
+              >
                 Talk to Sales
-              </button>
+              </a>
             </div>
           </div>
         </FadeIn>
@@ -992,15 +1004,29 @@ export default function Page() {
                 development and business enablement for growing companies.
               </p>
               <div className="mt-6 flex gap-4">
-                {[Code2, Link2, Sparkles].map((Icon, i) => (
-                  <a
-                    key={i}
-                    href="#"
-                    className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/60 text-slate-500 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-emerald-300 hover:text-emerald-600 hover:shadow-md hover:shadow-emerald-500/10"
-                  >
-                    <Icon className="h-4 w-4" />
-                  </a>
-                ))}
+                <a
+                  href="https://github.com/aman-yadav-dev/PayERupee"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Source Repository"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/60 text-slate-500 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-emerald-300 hover:text-emerald-600 hover:shadow-md hover:shadow-emerald-500/10"
+                >
+                  <Code2 className="h-4 w-4" />
+                </a>
+                <Link
+                  href="/terms"
+                  title="Legal & Compliance"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/60 text-slate-500 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-emerald-300 hover:text-emerald-600 hover:shadow-md hover:shadow-emerald-500/10"
+                >
+                  <Link2 className="h-4 w-4" />
+                </Link>
+                <Link
+                  href="/register"
+                  title="Get Started"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/60 text-slate-500 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-emerald-300 hover:text-emerald-600 hover:shadow-md hover:shadow-emerald-500/10"
+                >
+                  <Sparkles className="h-4 w-4" />
+                </Link>
               </div>
             </div>
 
@@ -1011,13 +1037,22 @@ export default function Page() {
                 </h4>
                 <ul className="mt-4 space-y-3">
                   {links.map((link) => (
-                    <li key={link}>
-                      <a
-                        href="#"
-                        className="text-sm text-slate-500 transition-colors hover:text-emerald-600"
-                      >
-                        {link}
-                      </a>
+                    <li key={link.label}>
+                      {link.href.startsWith("/") ? (
+                        <Link
+                          href={link.href}
+                          className="text-sm text-slate-500 transition-colors hover:text-emerald-600"
+                        >
+                          {link.label}
+                        </Link>
+                      ) : (
+                        <a
+                          href={link.href}
+                          className="text-sm text-slate-500 transition-colors hover:text-emerald-600"
+                        >
+                          {link.label}
+                        </a>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -1031,15 +1066,15 @@ export default function Page() {
               reserved.
             </p>
             <div className="flex gap-6 text-sm text-slate-500">
-              <a href="#" className="hover:text-slate-900">
+              <Link href="/terms" className="hover:text-slate-900 transition-colors">
                 Terms
-              </a>
-              <a href="#" className="hover:text-slate-900">
+              </Link>
+              <Link href="/privacy" className="hover:text-slate-900 transition-colors">
                 Privacy
-              </a>
-              <a href="#" className="hover:text-slate-900">
+              </Link>
+              <Link href="/privacy" className="hover:text-slate-900 transition-colors">
                 Security
-              </a>
+              </Link>
             </div>
           </div>
         </div>
